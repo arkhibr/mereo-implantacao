@@ -18,14 +18,16 @@ Cada etapa pode ser rodada isoladamente. O agente **orquestrador** (LLM) inspeci
 
 ## Pré-requisitos
 
-- **Python 3.10+** (`python3 --version`)
+- **Python 3.10+** (`python3 --version` no Linux/macOS, `python --version` no Windows)
 - **git** (para clonar)
 - **Chave de API de um provider LLM compatível com OpenAI**. Default: [Abacus RouteLLM](https://routellm.abacus.ai). Outros providers (OpenAI direto, Together, Groq, vLLM local) funcionam ajustando a `base_url`.
-- Sistema operacional: Linux ou macOS recomendados. Windows funciona via WSL.
+- Sistema operacional: **Linux, macOS ou Windows**. No Windows funciona em cmd.exe e PowerShell nativos (não precisa de WSL).
 
 ---
 
 ## Instalação
+
+### Linux / macOS
 
 ```bash
 git clone https://github.com/arkhibr/mereo-implantacao.git
@@ -38,7 +40,25 @@ cp .env.example .env
 # edite .env e preencha MEREO_LLM_API_KEY com sua chave do provider
 ```
 
-> Um instalador automatizado está em desenvolvimento — vai cuidar do venv, das dependências e da configuração interativa do `.env`.
+Comandos rodam com `./implantacao <comando> <cliente>`.
+
+### Windows (PowerShell ou cmd.exe)
+
+```powershell
+git clone https://github.com/arkhibr/mereo-implantacao.git
+cd mereo-implantacao
+
+python -m venv .venv
+.venv\Scripts\pip install -r requirements.txt
+
+copy .env.example .env
+notepad .env
+:: preencha MEREO_LLM_API_KEY com sua chave do provider
+```
+
+Comandos rodam com `implantacao.bat <comando> <cliente>` (no PowerShell, use `.\implantacao.bat`).
+
+> O `.env` é lido pelo próprio Python — funciona igual em Linux, macOS e Windows. Variáveis já definidas no ambiente têm prioridade sobre o `.env`.
 
 ### Variáveis de ambiente
 
@@ -50,13 +70,17 @@ cp .env.example .env
 | `MEREO_MAX_TOKENS` | `16000` | Limite por resposta |
 | `MEREO_MAX_ITERACOES` | `50` | Limite de turnos por sessão |
 
-O wrapper `./implantacao` carrega o `.env` automaticamente.
+O `.env` é carregado automaticamente pelo `cli.py` (em qualquer SO).
 
 ---
 
 ## Uso — passo a passo
 
-Todos os comandos são chamados via `./implantacao <comando> <cliente>`. Use `./implantacao` sem argumentos para ver a ajuda.
+Todos os comandos seguem `<wrapper> <comando> <cliente>`:
+- **Linux/macOS:** `./implantacao <comando> <cliente>`
+- **Windows:** `implantacao.bat <comando> <cliente>` (ou `.\implantacao.bat` no PowerShell)
+
+Os exemplos abaixo usam a forma Linux. No Windows, troque `./implantacao` por `implantacao.bat`. Use o wrapper sem argumentos para ver a ajuda.
 
 ### 1. Criar a estrutura para um cliente novo
 

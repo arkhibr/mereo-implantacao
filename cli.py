@@ -16,6 +16,7 @@ Uso:
 """
 import argparse
 import importlib
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -23,6 +24,43 @@ from pathlib import Path
 BASE = Path(__file__).parent
 CLIENTES_DIR = BASE / "clientes"
 MODELO_DIR = CLIENTES_DIR / "_modelo"
+
+
+def _carregar_env(arquivo: Path) -> None:
+    """Carrega variáveis de um .env simples (KEY=VALUE por linha) em os.environ.
+
+    Variáveis já definidas no ambiente NÃO são sobrescritas. Linhas em branco e
+    comentários (#) são ignorados. Aspas simples/duplas em volta do valor são
+    removidas. Mantemos o parser local para evitar uma dependência nova
+    (python-dotenv) e funcionar igual em Linux, macOS e Windows sem o wrapper
+    shell.
+    """
+    if not arquivo.is_file():
+        return
+    for linha in arquivo.read_text(encoding="utf-8").splitlines():
+        linha = linha.strip()
+        if not linha or linha.startswith("#"):
+            continue
+        if "=" not in linha:
+            continue
+        chave, _, valor = linha.partition("=")
+        chave = chave.strip()
+        valor = valor.strip().strip('"').strip("'")
+        if chave and chave not in os.environ:
+            os.environ[chave] = valor
+
+
+_carregar_env(BASE / ".env")
+
+# Garante UTF-8 no stdout para os ícones (✓ ⏸ ✗) e textos acentuados — em
+# Windows o cmd.exe historicamente usava cp1252 e quebrava esses caracteres.
+# reconfigure existe em Python 3.7+; o try protege ambientes que redirecionam
+# stdout para algo que não é TextIOWrapper (testes, pipes binários).
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+except (AttributeError, ValueError):
+    pass
 
 ETAPAS_DIAGNOSTICO = ["diagnostico", "mapeamento"]
 ETAPAS_TRANSFORMACAO = [
