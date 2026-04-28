@@ -85,6 +85,21 @@ Comandos rodam com `implantacao.bat <comando> <cliente>` (no PowerShell, use `.\
 
 > O `.env` é lido pelo próprio Python — funciona igual em Linux, macOS e Windows. Variáveis já definidas no ambiente têm prioridade sobre o `.env`.
 
+### Demo dirigida (apresentação ao vivo)
+
+Para mostrar o pipeline rodando passo a passo (com pausas explicativas entre cada etapa):
+
+```bash
+./demo.sh demo
+```
+
+O script roda os 3 comandos (`pilotar` → `validar` → `responder`) com narração e pausa entre cada um. Pressione Enter para avançar, Ctrl+C para abortar. Funciona em qualquer cliente que tenha `mapeamento.json` travado e `raw/` populado:
+
+```bash
+./demo.sh acme              # cliente acme
+./demo.sh acme --no-reset   # não limpa staging/output antes (útil pra rerun)
+```
+
 ### Variáveis de ambiente
 
 | Variável | Default | Função |
