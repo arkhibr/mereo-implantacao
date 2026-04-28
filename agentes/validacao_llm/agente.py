@@ -241,13 +241,19 @@ def construir_registro(pasta_cliente: str, sessao=None) -> RegistroTools:
         output = base / "output" / data_str
         output.mkdir(parents=True, exist_ok=True)
 
+        # BOM UTF-8: necessário para o Excel abrir os CSVs corretamente —
+        # sem ele os acentos viram mojibake (CÃ³digo, Ãrea etc).
+        BOM = b"\xef\xbb\xbf"
         copiados = []
         ausentes = []
         for staging_rel, (nome_template, _chave) in STAGING_PARA_TEMPLATE.items():
             src = base / staging_rel
             if src.exists():
                 dst = output / nome_template
-                shutil.copy2(src, dst)
+                dados = src.read_bytes()
+                if not dados.startswith(BOM):
+                    dados = BOM + dados
+                dst.write_bytes(dados)
                 copiados.append(nome_template)
             else:
                 ausentes.append(nome_template)

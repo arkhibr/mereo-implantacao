@@ -151,10 +151,16 @@ def executar(pasta_cliente: str, pasta_templates: str = None) -> dict:
         data_hoje = date.today().isoformat()
         output = base / "output" / data_hoje
         output.mkdir(parents=True, exist_ok=True)
+        # BOM UTF-8: o Excel só abre os CSVs corretamente com BOM —
+        # sem ele os acentos viram mojibake (CÃ³digo, Ãrea etc).
+        BOM = b"\xef\xbb\xbf"
         for staging_rel, (nome_template, _) in STAGING_PARA_TEMPLATE.items():
             src = base / staging_rel
             if src.exists():
-                shutil.copy2(src, output / nome_template)
+                dados = src.read_bytes()
+                if not dados.startswith(BOM):
+                    dados = BOM + dados
+                (output / nome_template).write_bytes(dados)
         resultado["dados"]["output_gerado"] = str(output)
         resultado["avisos"].append(f"Arquivos copiados para output/{data_hoje}/")
     else:
