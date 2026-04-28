@@ -1,6 +1,6 @@
 # Pipeline de Implantação RHTec/Mereo
 
-Pipeline em Python que transforma os dados brutos enviados por clientes corporativos nos arquivos finais para importação na plataforma de gestão de metas RHTec/Mereo. Combina agentes determinísticos (transformações) com agentes LLM (decisões semânticas e diagnóstico), e tem um modelo de **human-in-the-loop assíncrono** para os pontos onde a decisão precisa do consultor.
+Pipeline em Python que transforma os dados brutos enviados por clientes corporativos nos arquivos finais para importação na plataforma RHTec/Mereo. Combina agentes determinísticos (transformações) com agentes LLM (decisões semânticas e diagnóstico), e tem um modelo de **human-in-the-loop assíncrono** para os pontos onde a decisão precisa do consultor.
 
 > **Para quem é:** equipe de implantação Mereo. Não é necessário saber programar para operar — é necessário ter familiaridade com terminal e com a estrutura dos templates da plataforma.
 
@@ -8,25 +8,31 @@ Pipeline em Python que transforma os dados brutos enviados por clientes corporat
 
 ## O que o pipeline faz
 
-```
-clientes/<nome>/raw/                         (arquivos do cliente — Excel/CSV)
-        │
-        ▼
-   diagnóstico       —► config/diagnostico.json + diagnostico_resumo.md
-        │
-        ▼
-   mapeamento        —► config/mapeamento.json   (trava manualmente após revisar)
-        │
-        ▼
- transformações ──► staging/01_areas/, 02_colaboradores/, ..., 07_curva_alcance/
-   (areas, colaboradores, indicadores,
-    metas, curva_alcance, valores)
-        │
-        ▼
-   validação         —► relatorios/relatorio_validacao.md
-        │
-        ▼
-        output/<data>/Import_*.csv  (arquivos prontos pra importar na plataforma)
+```mermaid
+flowchart TB
+    Raw["raw/<br/>arquivos do cliente<br/>(Excel/CSV)"]
+    Diag["Diagnóstico<br/><i>(LLM)</i>"]
+    DiagOut["config/diagnostico.json<br/>config/diagnostico_resumo.md"]
+    Map["Mapeamento<br/><i>(LLM)</i>"]
+    MapOut["config/mapeamento.json<br/><i>(travar manualmente após revisar)</i>"]
+    Trans["Transformações<br/>areas, colaboradores,<br/>indicadores, metas,<br/>curva_alcance, valores"]
+    Stag["staging/01_areas/<br/>staging/02_colaboradores/<br/>...<br/>staging/07_curva_alcance/"]
+    Val["Validação<br/><i>(LLM)</i>"]
+    ValOut["relatorios/<br/>relatorio_validacao.md"]
+    Out["output/&lt;data&gt;/<br/>Import_*.csv<br/><b>prontos para importar</b>"]
+
+    Raw --> Diag --> DiagOut
+    DiagOut --> Map --> MapOut
+    MapOut --> Trans --> Stag
+    Stag --> Val --> ValOut
+    Val -- aprovado --> Out
+
+    classDef artefato fill:#eef,stroke:#88a
+    classDef agente fill:#efe,stroke:#8a8
+    classDef saida fill:#fed,stroke:#a88,stroke-width:2px
+    class Raw,DiagOut,MapOut,Stag,ValOut artefato
+    class Diag,Map,Trans,Val agente
+    class Out saida
 ```
 
 Cada etapa pode ser rodada isoladamente. O agente **orquestrador** (LLM) inspeciona o estado e decide a próxima ação razoável.

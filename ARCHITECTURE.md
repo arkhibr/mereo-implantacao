@@ -10,26 +10,57 @@ Este documento descreve a arquitetura interna do pipeline de implantação RHTec
 
 O pipeline é organizado em **dois tipos de agente** que cooperam pelo sistema de arquivos:
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                       CLI (./implantacao)                    │
-└──────────────────────────────────────────────────────────────┘
-              │                                │
-              ▼                                ▼
-   ┌─────────────────────┐           ┌─────────────────────┐
-   │ Agentes LLM         │           │ Agentes determinís- │
-   │ (decisões semân-    │  ◄──────► │ ticos (transforma-  │
-   │  ticas, HITL)       │           │  ções de dados)     │
-   └─────────────────────┘           └─────────────────────┘
-              │                                │
-              └─────────────┬──────────────────┘
-                            ▼
-              ┌──────────────────────────────┐
-              │ clientes/<nome>/             │
-              │   raw, config, staging,      │
-              │   output, relatorios,        │
-              │   sessoes                    │
-              └──────────────────────────────┘
+```mermaid
+flowchart TB
+    Consultor([Consultor])
+    CLI["CLI<br/><code>./implantacao</code>"]
+
+    subgraph Nucleo["Núcleo LLM (nucleo/)"]
+        direction LR
+        Runner["runner.py<br/>(loop manual)"]
+        Cliente["cliente_llm.py<br/>(provider OpenAI-compat)"]
+        Tools["registro_tools.py"]
+        HITL["hitl.py"]
+        Sess["sessoes.py"]
+    end
+
+    subgraph LLM["Agentes LLM"]
+        direction LR
+        Diag["diagnostico_llm"]
+        Map["mapeamento_llm"]
+        Val["validacao_llm"]
+        Orc["orquestrador_llm"]
+    end
+
+    subgraph Det["Agentes determinísticos"]
+        direction LR
+        Areas["areas"]
+        Colab["colaboradores"]
+        Ind["indicadores"]
+        Met["metas"]
+        Curva["curva_alcance"]
+        Valores["valores"]
+    end
+
+    subgraph Disco["clientes/&lt;nome&gt;/  (estado em disco)"]
+        direction LR
+        Raw["raw/"]
+        Conf["config/"]
+        Stag["staging/"]
+        Out["output/"]
+        Rel["relatorios/"]
+        Sessoes["sessoes/"]
+    end
+
+    Consultor -- comandos --> CLI
+    CLI --> LLM
+    CLI --> Det
+    LLM --> Nucleo
+    Orc -. invoca em-processo .-> Det
+    Orc -. delega via HITL .-> Diag & Map & Val
+    LLM <--> Disco
+    Det <--> Disco
+    HITL -. pausa/retoma .-> Consultor
 ```
 
 - **Agentes determinísticos** fazem as transformações mecânicas: ler Excel/CSV, recodificar valores, normalizar logins, derivar campos. Estão em `agentes/{areas, colaboradores, indicadores, metas, curva_alcance, valores}/`. Cada um expõe uma função `executar(pasta_cliente)` que devolve um dict `{status, dados, erros, avisos}`.
@@ -199,6 +230,44 @@ Quando concluído, o agente devolve um texto em PT-BR seguindo o que a SOP defin
 ---
 
 ## Fluxo HITL ponta a ponta
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Csl as Consultor
+    participant CLI as CLI
+    participant Run as Runner
+    participant Reg as RegistroTools
+    participant LLM as Provider LLM
+    participant Sess as sessoes/&lt;id&gt;/
+
+    Csl->>CLI: ./implantacao mapear acme
+    CLI->>Run: executar_agente(...)
+    Run->>Sess: cria sessão
+    Run->>LLM: chat.completions.create
+    LLM-->>Run: tool_calls (incl. perguntar_humano)
+    Run->>Reg: executar(perguntar_humano, args)
+    Reg-->>Run: HITLPausaSolicitada (SinalControle)
+    Run->>Sess: grava estado.json + status=pausada_hitl
+    Run-->>CLI: ResultadoExecucao(pausada_hitl)
+    CLI-->>Csl: imprime pergunta + comando para retomar
+
+    Note over Csl,Sess: processo termina; sessão fica em disco<br/>(consultor pode responder horas depois, em outro terminal)
+
+    Csl->>CLI: ./implantacao responder acme &lt;sid&gt;
+    CLI->>Sess: carrega estado.json + transcript
+    CLI->>Run: retomar_agente(resposta_humana)
+    Run->>Sess: appenda tool_results_parciais
+    Run->>Sess: appenda tool_result da resposta no tool_call_id_hitl
+    Run->>Sess: stubs para tool_call_ids_nao_executados
+    Run->>Sess: limpa estado.json + status=ativa
+    Run->>LLM: chat.completions.create (continua o loop)
+    LLM-->>Run: ... (até finish_reason=stop)
+    Run-->>CLI: ResultadoExecucao(concluida)
+    CLI-->>Csl: imprime resposta final
+```
+
+Em texto, o mesmo fluxo:
 
 ```
 1. Agente chama tool perguntar_humano(pergunta, contexto, opcoes)
