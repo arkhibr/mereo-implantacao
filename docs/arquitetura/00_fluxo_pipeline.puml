@@ -1,0 +1,60 @@
+@startuml 00_fluxo_pipeline
+
+title Pipeline de Implantação — Fluxo de Dados
+
+skinparam backgroundColor #FFFFFF
+skinparam DefaultFontColor #1A1A1A
+skinparam ActivityFontColor #1A1A1A
+skinparam ActivityFontSize 13
+skinparam ActivityBorderThickness 1.5
+skinparam ActivityArrowFontColor #424242
+skinparam NoteFontColor #1A1A1A
+skinparam NoteBackgroundColor #FFF9C4
+skinparam NoteBorderColor #F57F17
+skinparam ArrowColor #424242
+
+start
+
+#BBDEFB:**raw/**
+arquivos do cliente
+(Excel/CSV);
+
+#C8E6C9:**Diagnóstico**  //(LLM)//;
+note right #FFF9C4
+  config/diagnostico.json
+  config/diagnostico_resumo.md
+end note
+
+#C8E6C9:**Mapeamento**  //(LLM)//;
+note right #FFF9C4
+  config/mapeamento.json
+  //(travar manualmente após revisar)//
+end note
+
+#C8E6C9:**Transformações**
+areas, colaboradores, indicadores,
+metas, curva_alcance, valores;
+note right #FFF9C4
+  staging/01_areas/
+  staging/02_colaboradores/
+  ...
+  staging/07_curva_alcance/
+end note
+
+#C8E6C9:**Validação**  //(LLM)//;
+note right #FFF9C4
+  relatorios/relatorio_validacao.md
+end note
+
+if (aprovado?) then (sim)
+  #FFCC80:**output/<data>/Import_*.csv**
+  prontos para importar;
+else (bloqueado)
+  #EF9A9A:revisar achados
+  no relatório;
+  stop
+endif
+
+stop
+
+@enduml

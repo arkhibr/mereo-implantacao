@@ -8,32 +8,9 @@ Pipeline em Python que transforma os dados brutos enviados por clientes corporat
 
 ## O que o pipeline faz
 
-```mermaid
-flowchart TB
-    Raw["raw/<br/>arquivos do cliente<br/>(Excel/CSV)"]
-    Diag["Diagnóstico<br/><i>(LLM)</i>"]
-    DiagOut["config/diagnostico.json<br/>config/diagnostico_resumo.md"]
-    Map["Mapeamento<br/><i>(LLM)</i>"]
-    MapOut["config/mapeamento.json<br/><i>(travar manualmente após revisar)</i>"]
-    Trans["Transformações<br/>areas, colaboradores,<br/>indicadores, metas,<br/>curva_alcance, valores"]
-    Stag["staging/01_areas/<br/>staging/02_colaboradores/<br/>...<br/>staging/07_curva_alcance/"]
-    Val["Validação<br/><i>(LLM)</i>"]
-    ValOut["relatorios/<br/>relatorio_validacao.md"]
-    Out["output/&lt;data&gt;/<br/>Import_*.csv<br/><b>prontos para importar</b>"]
+![Fluxo do pipeline](docs/arquitetura/00_fluxo_pipeline.svg)
 
-    Raw --> Diag --> DiagOut
-    DiagOut --> Map --> MapOut
-    MapOut --> Trans --> Stag
-    Stag --> Val --> ValOut
-    Val -- aprovado --> Out
-
-    classDef artefato fill:#eef,stroke:#88a
-    classDef agente fill:#efe,stroke:#8a8
-    classDef saida fill:#fed,stroke:#a88,stroke-width:2px
-    class Raw,DiagOut,MapOut,Stag,ValOut artefato
-    class Diag,Map,Trans,Val agente
-    class Out saida
-```
+> Fonte: [`docs/arquitetura/00_fluxo_pipeline.puml`](docs/arquitetura/00_fluxo_pipeline.puml). Para regenerar: `cd docs/arquitetura && make`.
 
 Cada etapa pode ser rodada isoladamente. O agente **orquestrador** (LLM) inspeciona o estado e decide a próxima ação razoável.
 
