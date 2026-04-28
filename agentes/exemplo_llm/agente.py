@@ -48,7 +48,7 @@ def _listar_raw(pasta_cliente: str) -> dict:
     return {"status": "ok", "dados": {"total": len(arquivos), "arquivos": arquivos}}
 
 
-def construir_registro(pasta_cliente: str) -> RegistroTools:
+def construir_registro(pasta_cliente: str, sessao=None) -> RegistroTools:
     registro = RegistroTools()
     registro.registrar(Tool(
         nome="listar_arquivos_raw",

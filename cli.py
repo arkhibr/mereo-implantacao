@@ -166,10 +166,10 @@ def retomar_hitl(pasta: Path, sessao_id: str):
         _erro("Resposta vazia. Operação cancelada.")
 
     modulo = importlib.import_module(AGENTES_LLM[comando])
-    registro = modulo.construir_registro(str(pasta))
+    registro = modulo.construir_registro(str(pasta), sessao=sessao)
 
     print("\n  Retomando agente...\n")
-    resultado = retomar_agente(pasta, sessao_id, resposta, registro)
+    resultado = retomar_agente(pasta, sessao_id, resposta, registro, sessao=sessao)
     _imprimir_resultado_llm(pasta, resultado)
     sys.exit(0 if resultado.status in ("concluida", "pausada_hitl") else 1)
 

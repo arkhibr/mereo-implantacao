@@ -24,6 +24,7 @@ from agentes.valores       import agente as ag_valores
 from nucleo.hitl import HITLPausaSolicitada, construir_tool_hitl
 from nucleo.registro_tools import RegistroTools, Tool
 from nucleo.runner import executar_agente
+from nucleo.sessoes import Sessao
 
 
 BASE_PROJETO = Path(__file__).parent.parent.parent
@@ -69,15 +70,29 @@ STAGING_ENTIDADES = {
 }
 
 
-def construir_registro(pasta_cliente: str) -> RegistroTools:
+def construir_registro(pasta_cliente: str, sessao: Sessao | None = None) -> RegistroTools:
     base = Path(pasta_cliente)
     relatorios = base / "relatorios"
     relatorios.mkdir(exist_ok=True)
 
-    # Acumula etapas executadas pelo orquestrador na sessão corrente
-    # (apenas as que rodam em-processo; delegações via HITL não entram aqui
-    # até o humano confirmar a conclusão na resposta).
+    # Etapas executadas em-processo. Persistidas em sessao/orquestrador.json
+    # para sobreviver à pausa/retomada por HITL — do contrário, o registro é
+    # reconstruído na retomada e a lista zera, deixando log_pipeline.json
+    # com etapas: [].
+    estado_path = sessao.dir / "orquestrador.json" if sessao else None
     executadas: list[dict] = []
+    if estado_path and estado_path.exists():
+        try:
+            executadas = json.loads(estado_path.read_text(encoding="utf-8")).get("executadas", [])
+        except json.JSONDecodeError:
+            pass
+
+    def _persistir():
+        if estado_path:
+            estado_path.write_text(
+                json.dumps({"executadas": executadas}, ensure_ascii=False, indent=2, default=str),
+                encoding="utf-8",
+            )
 
     # ── Tools ────────────────────────────────────────────────────────────────
 
@@ -165,6 +180,7 @@ def construir_registro(pasta_cliente: str) -> RegistroTools:
             res = modulo.executar(str(base))
         except Exception as e:
             executadas.append({"etapa": etapa, "status": "erro", "detalhe": f"Exceção: {e}"})
+            _persistir()
             return {
                 "status": "erro",
                 "erros": [f"Falha ao executar '{etapa}': {e}"],
@@ -177,6 +193,7 @@ def construir_registro(pasta_cliente: str) -> RegistroTools:
             "avisos": res.get("avisos", []),
             "dados_resumo": _resumir_dados(res.get("dados", {})),
         })
+        _persistir()
         return {
             "status": res.get("status", "?"),
             "dados": {
@@ -357,13 +374,18 @@ def construir_registro(pasta_cliente: str) -> RegistroTools:
 
 
 def executar(pasta_cliente: str):
-    registro = construir_registro(pasta_cliente)
+    base = Path(pasta_cliente)
+    # Cria a sessão antes do registro para que o registro possa persistir
+    # 'executadas' em sessao/orquestrador.json e sobreviver à pausa HITL.
+    sessao = Sessao.criar(base, "orquestrador_llm", PROMPT_SISTEMA, PROMPT_TAREFA)
+    registro = construir_registro(pasta_cliente, sessao=sessao)
     return executar_agente(
-        cliente_path=Path(pasta_cliente),
+        cliente_path=base,
         agente="orquestrador_llm",
         prompt_sistema=PROMPT_SISTEMA,
         tarefa=PROMPT_TAREFA,
         registro=registro,
+        sessao=sessao,
     )
 
 

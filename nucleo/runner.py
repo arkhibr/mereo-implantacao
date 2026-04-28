@@ -49,9 +49,11 @@ def executar_agente(
     prompt_sistema: str,
     tarefa: str,
     registro: RegistroTools,
+    sessao: sessoes.Sessao | None = None,
 ) -> ResultadoExecucao:
-    """Cria sessão nova e roda o agente até concluir ou pausar para HITL."""
-    sessao = sessoes.Sessao.criar(cliente_path, agente, prompt_sistema, tarefa)
+    """Cria sessão nova (ou usa a fornecida) e roda o agente até concluir ou pausar."""
+    if sessao is None:
+        sessao = sessoes.Sessao.criar(cliente_path, agente, prompt_sistema, tarefa)
 
     mensagens: list[dict] = [{"role": "user", "content": tarefa}]
     sessao.append_mensagem(mensagens[0])
@@ -65,9 +67,11 @@ def retomar_agente(
     sessao_id: str,
     resposta_humana: str,
     registro: RegistroTools,
+    sessao: sessoes.Sessao | None = None,
 ) -> ResultadoExecucao:
-    """Carrega sessão pausada, entrega a resposta humana e continua o loop."""
-    sessao = sessoes.Sessao.carregar(cliente_path, sessao_id)
+    """Carrega sessão pausada (ou usa a fornecida) e continua o loop."""
+    if sessao is None:
+        sessao = sessoes.Sessao.carregar(cliente_path, sessao_id)
     estado = sessao.carregar_estado()
 
     if estado is None or estado.get("tipo") != "hitl":

@@ -52,7 +52,7 @@ PROMPT_TAREFA = (
 )
 
 
-def construir_registro(pasta_cliente: str) -> RegistroTools:
+def construir_registro(pasta_cliente: str, sessao=None) -> RegistroTools:
     base = Path(pasta_cliente)
     config = base / "config"
     config.mkdir(parents=True, exist_ok=True)
