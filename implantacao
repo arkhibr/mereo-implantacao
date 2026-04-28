@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Wrapper do CLI de implantação.
+#
+# - Usa o python do .venv local quando existir (necessário para os
+#   subcomandos LLM, já que o anthropic/openai SDK é instalado lá).
+# - Carrega variáveis de um arquivo .env opcional na raiz do projeto
+#   (modo simples: linhas KEY=VALUE, sem export, sem aspas obrigatórias).
+set -e
+
+DIR="$(cd "$(dirname "$0")" && pwd)"
+
+if [ -f "$DIR/.env" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . "$DIR/.env"
+  set +a
+fi
+
+if [ -x "$DIR/.venv/bin/python3" ]; then
+  exec "$DIR/.venv/bin/python3" "$DIR/cli.py" "$@"
+fi
+
+exec python3 "$DIR/cli.py" "$@"

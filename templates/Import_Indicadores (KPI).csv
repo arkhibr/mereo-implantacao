@@ -1,0 +1,2 @@
+Código do Indicador *;Descrição do Indicador *;Código da Unidade de Medida *;Código da Faixa de Farol *;Código de Frequência de Acompanhamento *;Polaridade *;Memória de Cálculo;Ativo *;Personalizar parâmetros de alerta via e-mail para este indicador;Frequência de recorrência de e-mail;Envio de e-mail de data limite a partir do dia;Envio de e-mail de alerta a partir do dia;Dias de atraso para notificação dos Stakeholders;Stakeholders a serem notificados
+100;indicador de exemplo;1;FXF01;1;1;;1;0;1;1;0;0;login1|login2

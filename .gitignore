@@ -1,0 +1,35 @@
+# Configuração local — JAMAIS comitar (contém chaves de API)
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Ambiente virtual
+.venv/
+venv/
+env/
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Claude Code — configuração local da máquina (permissões etc.)
+.claude/settings.local.json
+
+# Dados de clientes — nunca comitar (PII real)
+# A pasta _modelo/ é a estrutura template e PODE entrar.
+clientes/*/
+!clientes/_modelo/
+
+# Logs locais
+logs/*.log
