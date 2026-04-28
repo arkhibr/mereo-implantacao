@@ -27,7 +27,32 @@ Cada etapa pode ser rodada isoladamente. O agente **orquestrador** (LLM) inspeci
 
 ## Instalação
 
-### Linux / macOS
+### Modo recomendado: instalador automático
+
+**Linux / macOS** (Bash):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/arkhibr/mereo-implantacao/main/install.sh | bash
+```
+
+**Windows** (PowerShell):
+
+```powershell
+iwr -useb https://raw.githubusercontent.com/arkhibr/mereo-implantacao/main/install.ps1 | iex
+```
+
+O instalador:
+1. Confere que existe Python 3.10+ e git (orienta a instalação se faltar)
+2. Clona o repo em `./mereo-implantacao/` (ou `git pull` se já existir)
+3. Cria `.venv` e instala dependências
+4. Pergunta a chave do provider LLM e escreve no `.env`
+5. Roda um smoke test e imprime os próximos passos
+
+> Os scripts estão versionados no repo: [`install.sh`](install.sh) e [`install.ps1`](install.ps1) — você pode inspecionar antes de rodar.
+
+### Modo manual
+
+#### Linux / macOS
 
 ```bash
 git clone https://github.com/arkhibr/mereo-implantacao.git
@@ -42,7 +67,7 @@ cp .env.example .env
 
 Comandos rodam com `./implantacao <comando> <cliente>`.
 
-### Windows (PowerShell ou cmd.exe)
+#### Windows (PowerShell ou cmd.exe)
 
 ```powershell
 git clone https://github.com/arkhibr/mereo-implantacao.git
@@ -53,7 +78,7 @@ python -m venv .venv
 
 copy .env.example .env
 notepad .env
-:: preencha MEREO_LLM_API_KEY com sua chave do provider
+# preencha MEREO_LLM_API_KEY com sua chave do provider
 ```
 
 Comandos rodam com `implantacao.bat <comando> <cliente>` (no PowerShell, use `.\implantacao.bat`).
