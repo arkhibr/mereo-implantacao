@@ -1,0 +1,33 @@
+@startuml 02_container
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title Pipeline de Implantação RHTec/Mereo — Containers (C2)
+
+Person(consultor, "Consultor")
+System_Ext(provider, "Provider LLM", "OpenAI-compatible")
+System_Ext(plataforma, "Plataforma RHTec/Mereo")
+
+System_Boundary(impl, "Pipeline de Implantação") {
+    Container(cli, "CLI", "Python · ./implantacao", "Roteia subcomandos para agentes; carrega .env")
+    Container(nucleo, "Núcleo LLM", "Python · nucleo/", "Runner manual de tool use, registro de tools, HITL, sessões persistentes")
+    Container(agllm, "Agentes LLM", "Python · agentes/*_llm/", "diagnostico, mapeamento, validacao, orquestrador.\nCada um tem SOP-prompt + tools próprias")
+    Container(agdet, "Agentes Determinísticos", "Python · agentes/{areas, colaboradores, ...}", "Transformações mecânicas: lê Excel/CSV,\nrecodifica, normaliza, emite CSV")
+    ContainerDb(disco, "Estado em Disco", "Filesystem · clientes/<nome>/", "raw, config, staging, output, relatorios, sessoes —\ncontrato implícito entre agentes")
+    ContainerDb(sops, "SOPs e Templates", "Markdown + CSV · sops/, templates/, prompts/", "SOP-prompts dos agentes LLM,\ntemplates oficiais da plataforma")
+}
+
+Rel(consultor, cli, "Comandos", "shell")
+Rel(cli, agllm, "Invoca")
+Rel(cli, agdet, "Invoca (modo determinista)")
+Rel(agllm, nucleo, "Usa runner / tools / HITL")
+Rel(nucleo, provider, "Chat Completions + tool use", "HTTPS")
+Rel(agllm, agdet, "Pode invocar como tools (orquestrador)")
+Rel(agllm, disco, "Lê / escreve")
+Rel(agdet, disco, "Lê / escreve")
+Rel(agllm, sops, "Lê SOPs como system prompt")
+Rel(agdet, sops, "Lê templates")
+Rel(consultor, disco, "Edita config/mapeamento.json e dicionários")
+Rel(consultor, plataforma, "Importa output/<data>/*.csv", "Upload")
+
+SHOW_LEGEND()
+@enduml

@@ -1,0 +1,18 @@
+@startuml 01_contexto
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+title Pipeline de Implantação RHTec/Mereo — Contexto (C1)
+
+Person(consultor, "Consultor de Implantação", "Conduz a implantação do cliente: coleta dados, revisa mapeamento, autoriza decisões em HITL")
+
+System(impl, "Pipeline de Implantação", "Transforma dados brutos do cliente em arquivos prontos para a plataforma.\nCombina agentes determinísticos e LLM, com HITL assíncrono.")
+
+System_Ext(plataforma, "Plataforma RHTec/Mereo", "SaaS de gestão de metas.\nRecebe os Import_*.csv finais via importação manual.")
+System_Ext(provider, "Provider LLM", "Gateway OpenAI-compatible\n(Abacus RouteLLM por padrão; trocável)")
+
+Rel(consultor, impl, "Comanda via CLI; responde a perguntas em HITL")
+Rel(impl, provider, "tool use via Chat Completions", "HTTPS")
+Rel(consultor, plataforma, "Importa os arquivos finais", "Upload manual")
+
+SHOW_LEGEND()
+@enduml

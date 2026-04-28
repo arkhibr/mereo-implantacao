@@ -1,0 +1,41 @@
+@startuml 04_sequencia_hitl
+
+title Fluxo HITL — pausa e retomada assíncrona
+
+actor Consultor as Csl
+participant "CLI" as CLI
+participant "Runner" as Run
+participant "RegistroTools" as Reg
+participant "Provider LLM" as LLM
+database "sessoes/<id>/" as Sess
+
+Csl -> CLI : ./implantacao mapear acme
+CLI -> Run : executar_agente(...)
+Run -> Sess : cria sessão
+Run -> LLM : chat.completions.create
+LLM --> Run : tool_calls (incl. perguntar_humano)
+Run -> Reg : executar(perguntar_humano, args)
+Reg --> Run : HITLPausaSolicitada\n(SinalControle)
+Run -> Sess : grava estado.json\nstatus = pausada_hitl
+Run --> CLI : ResultadoExecucao(pausada_hitl)
+CLI --> Csl : imprime pergunta + comando para retomar
+
+note over Csl, Sess
+  Processo termina; sessão fica em disco.
+  Consultor pode responder horas depois,
+  em outro terminal, em outra máquina.
+end note
+
+Csl -> CLI : ./implantacao responder acme <sid>
+CLI -> Sess : carrega estado.json + transcript
+CLI -> Run : retomar_agente(resposta_humana)
+Run -> Sess : appenda tool_results_parciais
+Run -> Sess : appenda tool_result da resposta\nno tool_call_id_hitl
+Run -> Sess : stubs para tool_call_ids_nao_executados
+Run -> Sess : limpa estado.json\nstatus = ativa
+Run -> LLM : chat.completions.create\n(continua o loop)
+LLM --> Run : ... (até finish_reason=stop)
+Run --> CLI : ResultadoExecucao(concluida)
+CLI --> Csl : imprime resposta final
+
+@enduml

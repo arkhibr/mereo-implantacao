@@ -1,0 +1,30 @@
+@startuml 03_componente_nucleo
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+title Núcleo LLM — Componentes (C3)
+
+Container(cli, "CLI", "Python")
+Container(agllm, "Agentes LLM", "Python")
+System_Ext(provider, "Provider LLM", "OpenAI-compatible")
+ContainerDb(disco, "clientes/<nome>/sessoes/", "Filesystem")
+
+Container_Boundary(nucleo, "nucleo/") {
+    Component(runner, "runner.py", "Loop manual de tool use", "executar_agente / retomar_agente;\nloop até finish=stop, HITL ou max_iter")
+    Component(cliente_llm, "cliente_llm.py", "Provider", "Cria OpenAI client apontado para\nMEREO_LLM_BASE_URL; envia params padrão")
+    Component(reg, "registro_tools.py", "Tools + SinalControle", "Tool, RegistroTools.executar();\nSinalControle propaga ao runner")
+    Component(hitl, "hitl.py", "Pausa para humano", "Tool perguntar_humano;\nHITLPausaSolicitada herda SinalControle")
+    Component(sess, "sessoes.py", "Persistência", "Sessao: metadata, transcript.jsonl,\nestado.json (HITL); criar/carregar/append")
+}
+
+Rel(cli, runner, "executar_agente / retomar_agente")
+Rel(agllm, reg, "registra Tool com schema + função")
+Rel(agllm, hitl, "registra construir_tool_hitl()")
+Rel(runner, cliente_llm, "construir_cliente / parametros_padrao")
+Rel(runner, reg, "executar(nome, args)")
+Rel(runner, sess, "criar / carregar / append / gravar_estado")
+Rel(cliente_llm, provider, "chat.completions.create", "HTTPS")
+Rel(reg, hitl, "captura HITLPausaSolicitada e re-propaga")
+Rel(sess, disco, "metadata.json, transcript.jsonl, estado.json")
+
+SHOW_LEGEND()
+@enduml
