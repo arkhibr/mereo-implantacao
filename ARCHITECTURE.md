@@ -8,59 +8,90 @@ Este documento descreve a arquitetura interna do pipeline de implantação RHTec
 
 ## Visão geral
 
-O pipeline é organizado em **dois tipos de agente** que cooperam pelo sistema de arquivos:
+O pipeline é organizado em **dois tipos de agente** que cooperam pelo sistema de arquivos. As três visões a seguir seguem o modelo [C4](https://c4model.com/) — do mais externo (contexto) ao mais interno (componente).
+
+### Nível 1 — Contexto (C4 Context)
+
+Quem usa o sistema, com quais sistemas externos ele fala.
 
 ```mermaid
-flowchart TB
-    Consultor([Consultor])
-    CLI["CLI<br/><code>./implantacao</code>"]
+C4Context
+    title Sistema de Implantação RHTec/Mereo — Contexto
+    Person(consultor, "Consultor de Implantação", "Conduz a implantação do cliente: coleta dados, revisa mapeamento, autoriza decisões em HITL")
 
-    subgraph Nucleo["Núcleo LLM (nucleo/)"]
-        direction LR
-        Runner["runner.py<br/>(loop manual)"]
-        Cliente["cliente_llm.py<br/>(provider OpenAI-compat)"]
-        Tools["registro_tools.py"]
-        HITL["hitl.py"]
-        Sess["sessoes.py"]
-    end
+    System(impl, "Pipeline de Implantação", "Transforma dados brutos do cliente em arquivos prontos para a plataforma. Combina agentes determinísticos e LLM, com HITL assíncrono.")
 
-    subgraph LLM["Agentes LLM"]
-        direction LR
-        Diag["diagnostico_llm"]
-        Map["mapeamento_llm"]
-        Val["validacao_llm"]
-        Orc["orquestrador_llm"]
-    end
+    System_Ext(plataforma, "Plataforma RHTec/Mereo", "SaaS de gestão de metas. Recebe os Import_*.csv finais via importação manual.")
+    System_Ext(provider, "Provider LLM", "Gateway OpenAI-compatible (Abacus RouteLLM por padrão; trocável)")
 
-    subgraph Det["Agentes determinísticos"]
-        direction LR
-        Areas["areas"]
-        Colab["colaboradores"]
-        Ind["indicadores"]
-        Met["metas"]
-        Curva["curva_alcance"]
-        Valores["valores"]
-    end
+    Rel(consultor, impl, "Comanda via CLI; responde a perguntas em HITL")
+    Rel(impl, provider, "tool use via Chat Completions", "HTTPS")
+    Rel(consultor, plataforma, "Importa os arquivos finais", "Upload manual")
+```
 
-    subgraph Disco["clientes/&lt;nome&gt;/  (estado em disco)"]
-        direction LR
-        Raw["raw/"]
-        Conf["config/"]
-        Stag["staging/"]
-        Out["output/"]
-        Rel["relatorios/"]
-        Sessoes["sessoes/"]
-    end
+### Nível 2 — Container (C4 Container)
 
-    Consultor -- comandos --> CLI
-    CLI --> LLM
-    CLI --> Det
-    LLM --> Nucleo
-    Orc -. invoca em-processo .-> Det
-    Orc -. delega via HITL .-> Diag & Map & Val
-    LLM <--> Disco
-    Det <--> Disco
-    HITL -. pausa/retoma .-> Consultor
+Os blocos de execução do sistema e como se relacionam. "Container" no jargão C4 é qualquer coisa executável ou de armazenamento — não é Docker.
+
+```mermaid
+C4Container
+    title Pipeline de Implantação — Containers
+    Person(consultor, "Consultor")
+    System_Ext(provider, "Provider LLM", "OpenAI-compatible")
+    System_Ext(plataforma, "Plataforma RHTec/Mereo")
+
+    Container_Boundary(impl, "Pipeline de Implantação") {
+        Container(cli, "CLI", "Python · ./implantacao", "Roteia subcomandos para agentes; carrega .env")
+        Container(nucleo, "Núcleo LLM", "Python · nucleo/", "Runner manual de tool use, registro de tools, HITL, sessões persistentes")
+        Container(agllm, "Agentes LLM", "Python · agentes/*_llm/", "diagnostico, mapeamento, validacao, orquestrador. Cada um tem SOP-prompt + tools próprias")
+        Container(agdet, "Agentes Determinísticos", "Python · agentes/{areas, colaboradores, ...}", "Transformações mecânicas: lê Excel/CSV, recodifica, normaliza, emite CSV")
+        ContainerDb(disco, "Estado em Disco", "Filesystem · clientes/<nome>/", "raw, config, staging, output, relatorios, sessoes — contrato implícito entre agentes")
+        ContainerDb(sops, "SOPs e Templates", "Markdown + CSV · sops/, templates/, prompts/", "SOP-prompts dos agentes LLM, templates oficiais da plataforma")
+    }
+
+    Rel(consultor, cli, "Comandos", "shell")
+    Rel(cli, agllm, "Invoca")
+    Rel(cli, agdet, "Invoca (modo determinista)")
+    Rel(agllm, nucleo, "Usa runner / tools / HITL")
+    Rel(nucleo, provider, "Chat Completions + tool use", "HTTPS")
+    Rel(agllm, agdet, "Pode invocar como tools (orquestrador)")
+    Rel(agllm, disco, "Lê / escreve")
+    Rel(agdet, disco, "Lê / escreve")
+    Rel(agllm, sops, "Lê SOPs como system prompt")
+    Rel(agdet, sops, "Lê templates")
+    Rel(consultor, disco, "Edita config/mapeamento.json e dicionários")
+    Rel(consultor, plataforma, "Importa output/<data>/*.csv", "Upload")
+```
+
+### Nível 3 — Componente (C4 Component, núcleo LLM)
+
+Zoom no container "Núcleo LLM" — que é o ponto mais denso do código.
+
+```mermaid
+C4Component
+    title Núcleo LLM — Componentes
+    Container(cli, "CLI", "Python")
+    Container(agllm, "Agentes LLM", "Python")
+    System_Ext(provider, "Provider LLM", "OpenAI-compatible")
+    ContainerDb(disco, "clientes/<nome>/sessoes/", "Filesystem")
+
+    Container_Boundary(nucleo, "nucleo/") {
+        Component(runner, "runner.py", "Loop manual de tool use", "executar_agente / retomar_agente; loop até finish=stop, HITL ou max_iter")
+        Component(cliente_llm, "cliente_llm.py", "Provider", "Cria OpenAI client apontado para MEREO_LLM_BASE_URL; envia params padrão")
+        Component(reg, "registro_tools.py", "Tools + SinalControle", "Tool, RegistroTools.executar(); SinalControle propaga ao runner")
+        Component(hitl, "hitl.py", "Pausa para humano", "Tool perguntar_humano; HITLPausaSolicitada herda SinalControle")
+        Component(sess, "sessoes.py", "Persistência", "Sessao: metadata, transcript.jsonl, estado.json (HITL); criar/carregar/append")
+    }
+
+    Rel(cli, runner, "executar_agente / retomar_agente")
+    Rel(agllm, reg, "registra Tool com schema + função")
+    Rel(agllm, hitl, "registra construir_tool_hitl()")
+    Rel(runner, cliente_llm, "construir_cliente / parametros_padrao")
+    Rel(runner, reg, "executar(nome, args)")
+    Rel(runner, sess, "criar / carregar / append / gravar_estado")
+    Rel(cliente_llm, provider, "chat.completions.create", "HTTPS")
+    Rel(reg, hitl, "captura HITLPausaSolicitada e re-propaga")
+    Rel(sess, disco, "metadata.json, transcript.jsonl, estado.json")
 ```
 
 - **Agentes determinísticos** fazem as transformações mecânicas: ler Excel/CSV, recodificar valores, normalizar logins, derivar campos. Estão em `agentes/{areas, colaboradores, indicadores, metas, curva_alcance, valores}/`. Cada um expõe uma função `executar(pasta_cliente)` que devolve um dict `{status, dados, erros, avisos}`.
