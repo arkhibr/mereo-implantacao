@@ -59,6 +59,29 @@ O instalador:
 
 Se houver um erro de rede/SSL/proxy durante a instalação, veja a seção [Ambiente corporativo](#instalação-em-ambiente-corporativo) abaixo.
 
+#### Após instalar — valide a conectividade LLM
+
+O smoke test do instalador confirma que as dependências Python estão instaladas, mas **não** confirma que sua rede alcança o gateway do provider LLM nem que a chave responde. Antes de tentar com dados reais, rode o agente de smoke test (faz uma chamada mínima ao gateway):
+
+```bash
+# Linux/macOS
+./implantacao novo teste
+./implantacao demo teste
+
+# Windows
+.\implantacao.bat novo teste
+.\implantacao.bat demo teste
+```
+
+Se ambos rodarem com status `concluida`, sua instalação está pronta. Pode apagar o cliente de teste depois:
+
+```bash
+rm -rf clientes/teste              # Linux/macOS
+Remove-Item -Recurse -Force clientes\teste   # Windows
+```
+
+Se o `demo` falhar com erro de rede ou autenticação, antes de tentar dados reais resolva: confirme `MEREO_LLM_API_KEY` no `.env`, confirme que a rede corporativa não está bloqueando `routellm.abacus.ai` (ou o gateway que você configurou em `MEREO_LLM_BASE_URL`), e veja [Ambiente corporativo](#instalação-em-ambiente-corporativo) para proxy/SSL.
+
 ### Modo manual
 
 #### Linux / macOS

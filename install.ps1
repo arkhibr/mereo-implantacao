@@ -413,13 +413,20 @@ Write-Host
 Write-Host "  1. Entre no diretorio do projeto:"
 Write-Host "     cd $DirInstalacao" -ForegroundColor Cyan
 Write-Host
-Write-Host "  2. Crie a estrutura para um cliente novo:"
+Write-Host "  2. RECOMENDADO: valide conectividade com o provider LLM antes de"
+Write-Host "     usar dados reais. Roda uma chamada minima ao gateway e confirma"
+Write-Host "     que rede/proxy/chave estao OK:"
+Write-Host "     .\implantacao.bat novo teste" -ForegroundColor Cyan
+Write-Host "     .\implantacao.bat demo teste" -ForegroundColor Cyan
+Write-Host "     (se OK, pode remover:  Remove-Item -Recurse -Force clientes\teste )"
+Write-Host
+Write-Host "  3. Crie a estrutura para o cliente real:"
 Write-Host "     .\implantacao.bat novo NOME_DO_CLIENTE" -ForegroundColor Cyan
 Write-Host
-Write-Host "  3. Coloque os arquivos do cliente (Excel/CSV) em:"
+Write-Host "  4. Coloque os arquivos do cliente (Excel/CSV) em:"
 Write-Host "     clientes\NOME_DO_CLIENTE\raw\" -ForegroundColor Cyan
 Write-Host
-Write-Host "  4. Rode o orquestrador (decide o proximo passo):"
+Write-Host "  5. Rode o orquestrador (decide o proximo passo):"
 Write-Host "     .\implantacao.bat pilotar NOME_DO_CLIENTE" -ForegroundColor Cyan
 Write-Host
 Write-Host "  Documentacao: README.md  e  ARCHITECTURE.md"
