@@ -35,20 +35,29 @@ Cada etapa pode ser rodada isoladamente. O agente **orquestrador** (LLM) inspeci
 curl -fsSL https://raw.githubusercontent.com/arkhibr/mereo-implantacao/main/install.sh | bash
 ```
 
-**Windows** (PowerShell):
+**Windows** (PowerShell — máquina pessoal):
 
 ```powershell
 iwr -useb https://raw.githubusercontent.com/arkhibr/mereo-implantacao/main/install.ps1 | iex
 ```
 
+**Windows** (PowerShell — ambiente corporativo, com bypass de execution policy):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -Command "iwr -useb https://raw.githubusercontent.com/arkhibr/mereo-implantacao/main/install.ps1 | iex"
+```
+
 O instalador:
-1. Confere que existe Python 3.10+ e git (orienta a instalação se faltar)
-2. Clona o repo em `./mereo-implantacao/` (ou `git pull` se já existir)
-3. Cria `.venv` e instala dependências
-4. Pergunta a chave do provider LLM e escreve no `.env`
-5. Roda um smoke test e imprime os próximos passos
+1. Configura TLS 1.2 e detecta proxy do Windows (usa o do sistema se não houver `HTTPS_PROXY`)
+2. Confere que existe Python 3.10+ e git — oferece instalação automática via `winget` quando ausente
+3. Clona o repo em `./mereo-implantacao/` (ou baixa o ZIP se git falhar / não estiver disponível)
+4. Cria `.venv` e instala dependências
+5. Pergunta a chave do provider LLM e escreve no `.env`
+6. Roda um smoke test que importa as dependências do venv (detecta falha real, não só CLI vazio)
 
 > Os scripts estão versionados no repo: [`install.sh`](install.sh) e [`install.ps1`](install.ps1) — você pode inspecionar antes de rodar.
+
+Se houver um erro de rede/SSL/proxy durante a instalação, veja a seção [Ambiente corporativo](#instalação-em-ambiente-corporativo) abaixo.
 
 ### Modo manual
 
@@ -84,6 +93,82 @@ notepad .env
 Comandos rodam com `implantacao.bat <comando> <cliente>` (no PowerShell, use `.\implantacao.bat`).
 
 > O `.env` é lido pelo próprio Python — funciona igual em Linux, macOS e Windows. Variáveis já definidas no ambiente têm prioridade sobre o `.env`.
+
+### Instalação em ambiente corporativo
+
+Em máquinas corporativas (Windows) é comum encontrar bloqueios. Os pontos abaixo cobrem os cenários mais frequentes — o `install.ps1` já trata vários deles automaticamente, mas vale conhecer.
+
+#### 1. Execution Policy do PowerShell
+
+Em máquina nova com policy `Restricted` ou `AllSigned`, `iwr | iex` não roda. Use o one-liner com bypass de escopo (não muda a policy global, só da sessão):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -Command "iwr -useb https://raw.githubusercontent.com/arkhibr/mereo-implantacao/main/install.ps1 | iex"
+```
+
+Se a empresa bloqueia até o `-ExecutionPolicy Bypass` por GPO, baixe o script primeiro e rode local:
+
+```powershell
+iwr -useb https://raw.githubusercontent.com/arkhibr/mereo-implantacao/main/install.ps1 -OutFile install.ps1
+Unblock-File .\install.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+#### 2. Proxy corporativo
+
+O instalador detecta automaticamente o proxy do Windows (Internet Options) e exporta para `HTTPS_PROXY`/`HTTP_PROXY` na sessão. Se o proxy exige usuário/senha, defina antes de rodar:
+
+```powershell
+$env:HTTPS_PROXY = "http://USUARIO:SENHA@proxy.empresa.local:8080"
+$env:HTTP_PROXY  = $env:HTTPS_PROXY
+```
+
+Caracteres especiais na senha (`@`, `:`, `#`, `/`) precisam ser URL-encoded (ex.: `@` → `%40`).
+
+#### 3. Inspeção SSL (TLS interception)
+
+Sintoma: `pip` ou `git` falham com `SSL: CERTIFICATE_VERIFY_FAILED` ou `unable to get local issuer certificate`. Significa que o proxy reescreve o tráfego HTTPS com um certificado próprio, que o Python/git não conhece.
+
+Peça ao TI o certificado raiz do proxy (formato PEM) e configure:
+
+```powershell
+# Para pip
+setx PIP_CERT "C:\caminho\proxy-root.pem"
+
+# Para o requests do Python (alguns componentes usam esta var)
+setx REQUESTS_CA_BUNDLE "C:\caminho\proxy-root.pem"
+
+# Para git
+git config --global http.sslCAInfo "C:\caminho\proxy-root.pem"
+```
+
+Reabra o terminal depois do `setx`. **Não use `--trusted-host` como solução permanente** — desabilita verificação SSL e expõe a outros riscos.
+
+#### 4. SmartScreen / Windows Defender
+
+Scripts baixados da internet podem ser bloqueados pelo Mark-of-the-Web. Se aparecer aviso ao executar `install.ps1` salvo localmente:
+
+```powershell
+Unblock-File .\install.ps1
+```
+
+#### 5. Sem `git` na máquina
+
+O instalador detecta e oferece instalação via `winget install --id Git.Git`. Se `winget` também estiver bloqueado, ele cai automaticamente para baixar o repositório como ZIP.
+
+#### 6. Sem Python na máquina
+
+Mesmo comportamento: oferece `winget install --id Python.Python.3.12`. Se nada funcionar, instale manualmente da [página oficial](https://www.python.org/downloads/windows/) marcando **Add python.exe to PATH** e reabra o terminal.
+
+#### 7. Modo totalmente offline (air-gapped)
+
+Em uma máquina com acesso, baixe:
+
+```bash
+curl -L -o mereo.zip https://github.com/arkhibr/mereo-implantacao/archive/refs/heads/main.zip
+```
+
+Transfira o ZIP para a máquina-alvo, descompacte, renomeie a pasta para `mereo-implantacao` e rode o `install.ps1` de dentro dela. As dependências Python (`pip install -r requirements.txt`) ainda precisam de acesso ao PyPI — para verdadeiro air-gap, é preciso pré-baixar os wheels com `pip download -r requirements.txt -d wheels/` e instalar com `pip install --no-index --find-links wheels/ -r requirements.txt`.
 
 ### Demo dirigida (apresentação ao vivo)
 
