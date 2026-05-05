@@ -11,6 +11,7 @@ Uso:
   ./implantacao diagnosticar <cliente>                  (agente LLM de diagnóstico)
   ./implantacao mapear      <cliente>                   (agente LLM de mapeamento)
   ./implantacao validar     <cliente>                   (agente LLM de validação final)
+  ./implantacao inferir     <cliente>                   (agente LLM de inferência — fabrica entidades faltantes)
   ./implantacao pilotar     <cliente>                   (agente LLM orquestrador — decide próximo passo)
   ./implantacao responder   <cliente> <sessao_id>       (retoma agente em HITL)
 """
@@ -77,6 +78,7 @@ SUBCOMANDOS = {
     "diagnosticar": ("agente_llm",   "Roda o agente LLM de diagnóstico (substitui o determinista quando estabilizado)"),
     "mapear":       ("agente_llm",   "Roda o agente LLM de mapeamento (substitui o determinista quando estabilizado)"),
     "validar":      ("agente_llm",   "Roda o agente LLM de validação final (substitui o determinista quando estabilizado)"),
+    "inferir":      ("agente_llm",   "Roda o agente LLM de inferência (fabrica entidades canônicas que o cliente não enviou)"),
     "pilotar":      ("agente_llm",   "Roda o agente LLM orquestrador (decide o próximo passo a partir do estado)"),
     "responder":    ("retomar_hitl", "Retoma agente LLM pausado aguardando resposta humana"),
 }
@@ -86,6 +88,7 @@ AGENTES_LLM = {
     "diagnosticar": "agentes.diagnostico_llm.agente",
     "mapear":       "agentes.mapeamento_llm.agente",
     "validar":      "agentes.validacao_llm.agente",
+    "inferir":      "agentes.inferencia_llm.agente",
     "pilotar":      "agentes.orquestrador_llm.agente",
 }
 
@@ -285,6 +288,7 @@ Comandos (agentes LLM):
   diagnosticar <cliente>               Diagnóstico via agente LLM
   mapear       <cliente>               Mapeamento via agente LLM
   validar      <cliente>               Validação final via agente LLM
+  inferir      <cliente>               Inferência (fabrica entidades faltantes a partir das que vieram)
   pilotar      <cliente>               Orquestrador (decide o próximo passo)
   responder    <cliente> <sessao_id>   Retoma agente LLM pausado em human-in-the-loop
 
@@ -294,6 +298,7 @@ Exemplos:
   ./implantacao diagnosticar acme
   ./implantacao mapear       acme
   ./implantacao validar      acme
+  ./implantacao inferir      acme
   ./implantacao pilotar      acme
   ./implantacao responder    acme 20260426_142037_a3f1c2
 """)
