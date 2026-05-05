@@ -326,8 +326,11 @@ Falha ao criar .venv.
 $pipExe    = ".\.venv\Scripts\pip.exe"
 $pythonVenv = ".\.venv\Scripts\python.exe"
 
+# pip se recusa a se auto-atualizar via 'pip.exe install --upgrade pip' no
+# Windows (porque nao consegue sobrescrever o proprio binario em uso). A
+# forma correta e via 'python -m pip', que carrega o modulo e isola o upgrade.
 Write-Info "Atualizando pip"
-$pipOut = & $pipExe install --disable-pip-version-check --upgrade pip 2>&1
+$pipOut = & $pythonVenv -m pip install --disable-pip-version-check --upgrade pip 2>&1
 if ($LASTEXITCODE -ne 0) {
     $msg = ($pipOut -join "`n")
     Write-Warn2 "Falha ao atualizar pip; tentando seguir com a versao atual"
@@ -335,7 +338,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Info "Instalando dependencias (pode levar 1-2 min)"
-$pipOut = & $pipExe install --disable-pip-version-check -r requirements.txt 2>&1
+$pipOut = & $pythonVenv -m pip install --disable-pip-version-check -r requirements.txt 2>&1
 if ($LASTEXITCODE -ne 0) {
     $msg = ($pipOut -join "`n")
     Write-Host $msg -ForegroundColor DarkGray
@@ -345,13 +348,13 @@ if ($LASTEXITCODE -ne 0) {
 pip falhou por SSL (provavelmente inspecao SSL do proxy corporativo).
 
   Solucoes (peca ao TI o cert raiz do proxy, em formato PEM):
-    1) Apontar pip para o cert:
-         setx PIP_CERT "C:\caminho\proxy-root.pem"
+    1) Apontar pip para o cert (substitua <CAMINHO_REAL> pelo caminho do .pem):
+         setx PIP_CERT "<CAMINHO_REAL>\proxy-root.pem"
        e reabra o terminal
     2) Adicionar o cert ao Trust Store do Windows
     3) Em ULTIMO caso (apenas se autorizado pelo TI):
-         $env:PIP_INDEX_URL = 'https://pypi.org/simple'
-         & $pipExe install --trusted-host pypi.org --trusted-host files.pythonhosted.org -r requirements.txt
+         `$env:PIP_INDEX_URL = 'https://pypi.org/simple'
+         .\.venv\Scripts\python.exe -m pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org -r requirements.txt
 "@
     }
     elseif ($msg -match "ProxyError|Cannot connect to proxy|getaddrinfo failed|Could not resolve") {
