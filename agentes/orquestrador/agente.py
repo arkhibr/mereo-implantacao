@@ -19,6 +19,7 @@ from agentes.metas          import agente as ag_metas
 from agentes.curva_alcance  import agente as ag_curva_alcance
 from agentes.valores        import agente as ag_valores
 from agentes.validacao      import agente as ag_validacao
+from nucleo import visual
 
 PIPELINE = [
     ("diagnostico",    ag_diagnostico,    "Analisando arquivos do cliente..."),
@@ -59,16 +60,14 @@ def executar(pasta_cliente: str, escopo: list = None, parar_em_erro: bool = True
     agentes_executar = escopo or [nome for nome, _, _ in PIPELINE]
     base = Path(pasta_cliente)
 
-    _log(f"\n{'='*50}")
-    _log(f"Iniciando pipeline — cliente: {base.name}")
-    _log(f"Etapas: {agentes_executar}")
-    _log(f"{'='*50}\n")
+    # Cabeçalho/rodapé "===" antigos ficaram só na resposta do CLI; o
+    # orquestrador agora emite apenas eventos por etapa, com paleta semântica.
 
     for nome, modulo, mensagem in PIPELINE:
         if nome not in agentes_executar:
             continue
 
-        _log(f"[{nome.upper()}] {mensagem}")
+        print(visual.info(f"{nome}: {mensagem}"))
 
         try:
             res = modulo.executar(str(pasta_cliente))
@@ -89,16 +88,20 @@ def executar(pasta_cliente: str, escopo: list = None, parar_em_erro: bool = True
 
         status = res.get("status", "erro")
         if status == "erro":
-            _log(f"  ❌ Falhou: {res.get('erros', [])}")
+            erros = res.get("erros", [])
+            primeiro = erros[0] if erros else "erro sem detalhes"
+            print(visual.error(f"{nome}: {primeiro}"))
             if parar_em_erro and nome in BLOQUEADORES:
                 resultado["status"] = "erro"
                 resultado["erros"].append(f"Pipeline interrompido em '{nome}' (agente bloqueador).")
                 break
         elif status == "aviso":
-            _log(f"  ⚠️  Concluído com avisos: {res.get('avisos', [])[:2]}")
+            avisos = res.get("avisos", [])
+            primeiro = avisos[0] if avisos else "concluído com aviso"
+            print(visual.warning(f"{nome}: {primeiro}"))
         else:
-            dados = res.get("dados", {})
-            _log(f"  ✅ OK — {_resumir_dados(dados)}")
+            resumo = _resumir_dados(res.get("dados", {})) or "concluído"
+            print(visual.success(f"{nome}: {resumo}"))
 
     resultado["fim"] = datetime.now().isoformat()
 
@@ -107,11 +110,6 @@ def executar(pasta_cliente: str, escopo: list = None, parar_em_erro: bool = True
 
     # Persistir log do pipeline
     _salvar_log(resultado, base / "relatorios" / "log_pipeline.json")
-
-    _log(f"\n{'='*50}")
-    _log(f"Pipeline concluído — status: {status_final.upper()}")
-    _log(f"Erros: {len(resultado['erros'])} | Avisos: {len(resultado['avisos'])}")
-    _log(f"{'='*50}\n")
 
     return resultado
 
@@ -146,7 +144,3 @@ def _salvar_log(resultado: dict, caminho: Path):
             json.dump(resultado, f, ensure_ascii=False, indent=2, default=str)
     except Exception:
         pass
-
-
-def _log(msg: str):
-    print(msg)
