@@ -26,6 +26,12 @@ BASE = Path(__file__).parent
 CLIENTES_DIR = BASE / "clientes"
 MODELO_DIR = CLIENTES_DIR / "_modelo"
 
+# Lazy import (depois que sys.path estiver ajustado em tempo de execução).
+def _visual():
+    sys.path.insert(0, str(BASE))
+    from nucleo import visual
+    return visual
+
 
 def _carregar_env(arquivo: Path) -> None:
     """Carrega variáveis de um .env simples (KEY=VALUE por linha) em os.environ.
@@ -127,10 +133,15 @@ def rodar_etapa(pasta: Path, etapa: str):
     else:
         _erro(f"Etapa desconhecida: {etapa}")
 
-    print(f"\n{'='*55}")
-    print(f"  Cliente : {pasta.name}")
-    print(f"  Etapa   : {titulo}")
-    print(f"{'='*55}\n")
+    v = _visual()
+    print()
+    print(v.cabecalho(
+        largura=v.largura_terminal(default=60),
+        Cliente=pasta.name,
+        Etapa=titulo,
+        Iniciado=v.agora(),
+    ))
+    print()
 
     from agentes.orquestrador import agente as orc
     resultado = orc.executar(str(pasta), escopo=escopo)
@@ -150,10 +161,15 @@ def rodar_agente_llm(pasta: Path, comando: str):
         _erro(f"Agente LLM desconhecido para o comando: {comando}")
 
     modulo = importlib.import_module(AGENTES_LLM[comando])
-    print(f"\n{'='*55}")
-    print(f"  Cliente : {pasta.name}")
-    print(f"  Agente  : {comando} (LLM)")
-    print(f"{'='*55}\n")
+    v = _visual()
+    print()
+    print(v.cabecalho(
+        largura=v.largura_terminal(default=60),
+        Cliente=pasta.name,
+        Agente=f"{comando} (LLM)",
+        Iniciado=v.agora(),
+    ))
+    print()
 
     try:
         resultado = modulo.executar(str(pasta))
@@ -184,14 +200,15 @@ def retomar_hitl(pasta: Path, sessao_id: str):
     if not estado:
         _erro(f"Sessão {sessao_id} não está pausada aguardando resposta humana.")
 
-    print(f"\n  Pergunta pendente: {estado.get('pergunta', '')}")
+    v = _visual()
+    print(f"\n  {v.titulo('Pergunta pendente:')} {estado.get('pergunta', '')}")
     if estado.get("contexto"):
-        print(f"\n  Contexto: {estado['contexto']}")
+        print(f"\n  {v.titulo('Contexto:')} {estado['contexto']}")
     if estado.get("opcoes"):
-        print("\n  Opções sugeridas:")
+        print(f"\n  {v.titulo('Opções sugeridas:')}")
         for opcao in estado["opcoes"]:
             print(f"    - {opcao}")
-    print("\n  Digite a resposta (Enter duplo para enviar):\n")
+    print(f"\n  {v.info('Digite a resposta (Enter duplo para enviar):')}\n")
     linhas = []
     while True:
         try:
@@ -209,63 +226,72 @@ def retomar_hitl(pasta: Path, sessao_id: str):
     modulo = importlib.import_module(AGENTES_LLM[comando])
     registro = modulo.construir_registro(str(pasta), sessao=sessao)
 
-    print("\n  Retomando agente...\n")
+    print(f"\n  {v.info('Retomando agente...')}\n")
     resultado = retomar_agente(pasta, sessao_id, resposta, registro, sessao=sessao)
     _imprimir_resultado_llm(pasta, resultado)
     sys.exit(0 if resultado.status in ("concluida", "pausada_hitl") else 1)
 
 
 def _imprimir_resultado_llm(pasta: Path, resultado):
-    icone = {"concluida": "✓", "pausada_hitl": "⏸", "erro": "✗", "ativa": "…"}.get(resultado.status, "?")
-    print(f"  {icone} Status: {resultado.status.upper()}")
-    print(f"    Sessão: clientes/{pasta.name}/sessoes/{resultado.sessao_id}")
+    v = _visual()
+    marca = {
+        "concluida": v.success,
+        "pausada_hitl": v.pausa,
+        "erro": v.error,
+        "ativa": v.info,
+    }.get(resultado.status, v.info)
+    print(f"  {marca(f'Status: {resultado.status.upper()}')}")
+    print(f"    {v.fraco('Sessão:')} {v.caminho(f'clientes/{pasta.name}/sessoes/{resultado.sessao_id}')}")
 
     if resultado.status == "concluida":
         if resultado.resposta_final:
-            print("\n  Resposta do agente:\n")
+            print(f"\n  {v.titulo('Resposta do agente:')}\n")
             for linha in resultado.resposta_final.splitlines():
                 print(f"    {linha}")
         print()
 
     elif resultado.status == "pausada_hitl" and resultado.pergunta_humana:
         ph = resultado.pergunta_humana
-        print(f"\n  ❓ Pergunta: {ph['pergunta']}")
+        print(f"\n  {v.colorir('❓', v.MAGENTA)} {v.titulo('Pergunta:')} {ph['pergunta']}")
         if ph.get("contexto"):
-            print(f"\n     Contexto: {ph['contexto']}")
+            print(f"\n     {v.titulo('Contexto:')} {ph['contexto']}")
         if ph.get("opcoes"):
-            print("\n     Opções:")
+            print(f"\n     {v.titulo('Opções:')}")
             for opcao in ph["opcoes"]:
                 print(f"       - {opcao}")
-        print(f"\n  ► Para responder:  ./implantacao responder {pasta.name} {resultado.sessao_id}\n")
+        cmd_resp = f"./implantacao responder {pasta.name} {resultado.sessao_id}"
+        print(f"\n  {v.info(f'Para responder: {v.comando(cmd_resp)}')}\n")
 
     elif resultado.status == "erro" and resultado.erro:
-        print(f"\n  ✗ {resultado.erro}\n")
+        print(f"\n  {v.error(resultado.erro)}\n")
 
 
 def _imprimir_resultado(resultado: dict):
+    v = _visual()
     etapas = resultado.get("etapas", {})
     erros_globais = resultado.get("erros", [])
 
     for nome, etapa in etapas.items():
         status = etapa.get("status", "?")
-        icone = {"ok": "✓", "aviso": "⚠", "erro": "✗"}.get(status, "?")
+        marca = {"ok": v.success, "aviso": v.warning, "erro": v.error}.get(status, v.info)
         resumo = etapa.get("dados_resumo", "")
-        linha = f"  {icone} {nome:<20} {status:<8}"
+        linha = f"  {marca(f'{nome:<20} {status:<8}')}"
         if resumo:
-            linha += f"  {resumo}"
+            linha += f"  {v.fraco(resumo)}"
         print(linha)
         for e in etapa.get("erros", []):
-            print(f"      ✗ {e}")
+            print(f"      {v.error(e)}")
         for a in etapa.get("avisos", []):
-            print(f"      · {a}")
+            print(f"      · {v.fraco(a)}")
 
     status_final = resultado.get("status", "erro")
-    print(f"\n  Status final: {status_final.upper()}")
+    marca_final = {"ok": v.success, "aviso": v.warning}.get(status_final, v.error)
+    print(f"\n  {marca_final(f'Status final: {status_final.upper()}')}")
 
     if erros_globais:
         print()
         for e in erros_globais:
-            print(f"  ✗ {e}")
+            print(f"  {v.error(e)}")
 
 
 def _erro(msg: str):
@@ -273,47 +299,93 @@ def _erro(msg: str):
     sys.exit(1)
 
 
-def _ajuda():
-    print("""
-Uso:  ./implantacao <comando> <cliente> [args]
+_CATEGORIAS_AJUDA = [
+    ("SETUP", [
+        ("novo",         "<cliente>",          "Cria estrutura de pastas para um novo cliente"),
+    ]),
+    ("PIPELINE DETERMINISTA", [
+        ("analisar",     "<cliente>",          "Diagnóstico + mapeamento automático"),
+        ("transformar",  "<cliente>",          "Roda transformações + validação"),
+        ("rodar",        "<cliente>",          "Pipeline completo (analisar + transformar)"),
+    ]),
+    ("AGENTES LLM", [
+        ("diagnosticar", "<cliente>",          "Diagnóstico"),
+        ("mapear",       "<cliente>",          "Mapeamento"),
+        ("inferir",      "<cliente>",          "Inferência (fabrica entidades faltantes)"),
+        ("validar",      "<cliente>",          "Validação final"),
+        ("pilotar",      "<cliente>",          "Orquestrador (decide próximo passo)"),
+    ]),
+    ("HUMAN-IN-THE-LOOP", [
+        ("responder",    "<cliente> <sessao>", "Retoma agente pausado aguardando resposta"),
+    ]),
+    ("OUTROS", [
+        ("demo",         "<cliente>",          "Smoke test do agente exemplo (valida LLM)"),
+        ("ajuda",        "",                   "Mostra esta tela"),
+    ]),
+]
 
-Comandos (deterministas):
-  novo         <cliente>               Cria a estrutura de pastas para um novo cliente
-  analisar     <cliente>               Diagnóstico + mapeamento automático (versão determinista)
-  transformar  <cliente>               Transforma os dados e gera o output final
-  rodar        <cliente>               Pipeline completo (analisar + transformar)
 
-Comandos (agentes LLM):
-  demo         <cliente>               Agente exemplo (valida infra LLM)
-  diagnosticar <cliente>               Diagnóstico via agente LLM
-  mapear       <cliente>               Mapeamento via agente LLM
-  validar      <cliente>               Validação final via agente LLM
-  inferir      <cliente>               Inferência (fabrica entidades faltantes a partir das que vieram)
-  pilotar      <cliente>               Orquestrador (decide o próximo passo)
-  responder    <cliente> <sessao_id>   Retoma agente LLM pausado em human-in-the-loop
+def _imprimir_lista_comandos():
+    v = _visual()
+    for categoria, comandos in _CATEGORIAS_AJUDA:
+        print(v.titulo(categoria))
+        for nome_cmd, args, desc in comandos:
+            sig = f"{nome_cmd:<13} {args:<20}"
+            print(f"  {v.comando(sig)} {desc}")
+        print()
 
-Exemplos:
-  ./implantacao novo         acme
-  ./implantacao analisar     acme
-  ./implantacao diagnosticar acme
-  ./implantacao mapear       acme
-  ./implantacao validar      acme
-  ./implantacao inferir      acme
-  ./implantacao pilotar      acme
-  ./implantacao responder    acme 20260426_142037_a3f1c2
-""")
+
+def _welcome():
+    v = _visual()
+    from nucleo import __version__
+    print()
+    print(v.banner(versao=__version__))
+    print()
+    print("Transforma dados brutos de clientes corporativos nos arquivos")
+    print("de importação da plataforma Mereo. Combina pipelines deterministas")
+    print("+ agentes LLM com human-in-the-loop assíncrono.")
+    print()
+    print(f"{v.titulo('USO BÁSICO')}")
+    print(f"  ./implantacao {v.comando('<comando>')} {v.comando('<cliente>')}")
+    print()
+    _imprimir_lista_comandos()
+    print(v.titulo("EXEMPLOS"))
+    print(f"  ./implantacao {v.comando('novo acme')}")
+    print(f"  ./implantacao {v.comando('pilotar acme')}")
+    print(f"  ./implantacao {v.comando('responder acme 20260428_142037_a3f1c2')}")
+    print()
+    print(v.fraco("Documentação: README.md  ·  ARCHITECTURE.md"))
+    print(v.fraco("Provider LLM: configurado via .env (MEREO_LLM_API_KEY)"))
+    print()
+
+
+def _ajuda_compacta():
+    v = _visual()
+    from nucleo import __version__
+    print()
+    print(f"  Implantação RHTec/Mereo {v.fraco(f'· v{__version__}')}")
+    print()
+    print(f"  {v.titulo('Uso:')}  ./implantacao {v.comando('<comando>')} {v.comando('<cliente>')} [args]")
+    print()
+    _imprimir_lista_comandos()
+    print(v.fraco("  Para a tela completa (banner + descrição), rode  ./implantacao  sem argumentos."))
+    print()
 
 
 def main():
-    if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help", "ajuda"):
-        _ajuda()
+    if len(sys.argv) < 2:
+        _welcome()
+        sys.exit(0)
+    if sys.argv[1] in ("-h", "--help", "ajuda"):
+        _ajuda_compacta()
         sys.exit(0)
 
     cmd = sys.argv[1]
 
     if cmd not in SUBCOMANDOS:
-        print(f"\nComando desconhecido: '{cmd}'", file=sys.stderr)
-        _ajuda()
+        v = _visual()
+        print(f"\n{v.error(f'Comando desconhecido: ' + repr(cmd))}", file=sys.stderr)
+        _ajuda_compacta()
         sys.exit(1)
 
     if len(sys.argv) < 3:

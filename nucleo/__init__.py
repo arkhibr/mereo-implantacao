@@ -10,3 +10,5 @@ usando seu próprio módulo `agentes/<nome>/agente.py` — este núcleo serve
 aos agentes que dependem de julgamento (diagnostico, mapeamento,
 validacao, orquestrador) e os aciona via tool calls.
 """
+
+__version__ = "0.1.0"
