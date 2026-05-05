@@ -329,17 +329,35 @@ $pythonVenv = ".\.venv\Scripts\python.exe"
 # pip se recusa a se auto-atualizar via 'pip.exe install --upgrade pip' no
 # Windows (porque nao consegue sobrescrever o proprio binario em uso). A
 # forma correta e via 'python -m pip', que carrega o modulo e isola o upgrade.
+#
+# Sobre o ErrorActionPreference: pip emite WARNINGs no stderr (cache
+# corrompido, deprecation) que com Stop global viram fatal. Trocamos pra
+# Continue durante chamadas pip e usamos $LASTEXITCODE como verdade.
+function Invoke-Pip {
+    param([string[]]$Args)
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $saida = & $pythonVenv -m pip @Args 2>&1
+        return @{ Saida = $saida; Codigo = $LASTEXITCODE }
+    } finally {
+        $ErrorActionPreference = $prev
+    }
+}
+
 Write-Info "Atualizando pip"
-$pipOut = & $pythonVenv -m pip install --disable-pip-version-check --upgrade pip 2>&1
-if ($LASTEXITCODE -ne 0) {
+$res = Invoke-Pip @("install", "--disable-pip-version-check", "--upgrade", "pip")
+$pipOut = $res.Saida
+if ($res.Codigo -ne 0) {
     $msg = ($pipOut -join "`n")
     Write-Warn2 "Falha ao atualizar pip; tentando seguir com a versao atual"
     Write-Host $msg -ForegroundColor DarkGray
 }
 
 Write-Info "Instalando dependencias (pode levar 1-2 min)"
-$pipOut = & $pythonVenv -m pip install --disable-pip-version-check -r requirements.txt 2>&1
-if ($LASTEXITCODE -ne 0) {
+$res = Invoke-Pip @("install", "--disable-pip-version-check", "-r", "requirements.txt")
+$pipOut = $res.Saida
+if ($res.Codigo -ne 0) {
     $msg = ($pipOut -join "`n")
     Write-Host $msg -ForegroundColor DarkGray
 
@@ -425,8 +443,14 @@ open(arq, "w", encoding="utf-8").write(texto)
 # 5) Smoke test ------------------------------------------------------------
 Write-Tit "5/6  Smoke test (importando dependencias do venv)"
 
+# Mesma proteção do bloco pip: warnings de DeprecationWarning ou similares
+# saem em stderr e com Stop quebrariam o script. $LASTEXITCODE e a verdade.
+$prevErr = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
 $smokeOut = & $pythonVenv -c "import pandas, openpyxl, openai, chardet; print('imports OK')" 2>&1
-if ($LASTEXITCODE -eq 0) {
+$smokeCodigo = $LASTEXITCODE
+$ErrorActionPreference = $prevErr
+if ($smokeCodigo -eq 0) {
     Write-OK "Imports OK ($($smokeOut -join ' '))"
 } else {
     $msg = ($smokeOut -join "`n")
