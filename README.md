@@ -152,20 +152,31 @@ Caracteres especiais na senha (`@`, `:`, `#`, `/`) precisam ser URL-encoded (ex.
 
 Sintoma: `pip` ou `git` falham com `SSL: CERTIFICATE_VERIFY_FAILED` ou `unable to get local issuer certificate`. Significa que o proxy reescreve o tráfego HTTPS com um certificado próprio, que o Python/git não conhece.
 
-Peça ao TI o certificado raiz do proxy (formato PEM) e configure:
+Peça ao TI o certificado raiz do proxy (formato PEM) e troque os comandos abaixo, **substituindo `<CAMINHO\REAL\AQUI>` pelo caminho de verdade do .pem na sua máquina** (não copie o exemplo literal — ele é placeholder):
 
 ```powershell
-# Para pip
-setx PIP_CERT "C:\caminho\proxy-root.pem"
+# Para pip — substitua <CAMINHO\REAL\AQUI> pelo caminho do seu .pem
+setx PIP_CERT "<CAMINHO\REAL\AQUI>\proxy-root.pem"
 
 # Para o requests do Python (alguns componentes usam esta var)
-setx REQUESTS_CA_BUNDLE "C:\caminho\proxy-root.pem"
+setx REQUESTS_CA_BUNDLE "<CAMINHO\REAL\AQUI>\proxy-root.pem"
 
 # Para git
-git config --global http.sslCAInfo "C:\caminho\proxy-root.pem"
+git config --global http.sslCAInfo "<CAMINHO\REAL\AQUI>\proxy-root.pem"
 ```
 
 Reabra o terminal depois do `setx`. **Não use `--trusted-host` como solução permanente** — desabilita verificação SSL e expõe a outros riscos.
+
+> [!WARNING]
+> Se você seguiu este passo e digitou um caminho falso (ex.: `C:\caminho\proxy-root.pem`), o `pip` vai quebrar em **toda** instalação futura (mesmo sem proxy). Para desfazer, em qualquer sessão PowerShell:
+>
+> ```powershell
+> [Environment]::SetEnvironmentVariable("PIP_CERT", $null, "User")
+> [Environment]::SetEnvironmentVariable("REQUESTS_CA_BUNDLE", $null, "User")
+> git config --global --unset http.sslCAInfo
+> ```
+>
+> Reabra o terminal depois. O instalador atual também detecta esse caso automaticamente e remove a variável da sessão antes de chamar pip — mas a versão **persistente** segue gravada até você desfazer manualmente.
 
 #### 4. SmartScreen / Windows Defender
 

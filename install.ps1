@@ -26,10 +26,22 @@ $ErrorActionPreference = "Stop"
 # UTF-8 no console para imprimir acentuados.
 try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
 
+# Salva o pwd inicial para que qualquer caminho de erro retorne pra ele,
+# evitando deixar o usuario "preso" em diretorios aninhados quando o script
+# rodar via 'iwr | iex' e abortar antes do Pop-Location final.
+$Script:PwdInicial = (Get-Location).Path
+
 function Write-OK    { param($m) Write-Host "[OK] $m"   -ForegroundColor Green }
 function Write-Info  { param($m) Write-Host "[..] $m"   -ForegroundColor Cyan }
 function Write-Warn2 { param($m) Write-Host "[!!] $m"   -ForegroundColor Yellow }
-function Write-Err   { param($m) Write-Host "[XX] $m"   -ForegroundColor Red; exit 1 }
+function Write-Err {
+    param($m)
+    Write-Host "[XX] $m" -ForegroundColor Red
+    # Volta pro diretorio inicial para que erros nao deixem o usuario
+    # com pwd dentro do clone. Tolerante a falhas (path pode ter sumido).
+    try { Set-Location $Script:PwdInicial -ErrorAction Stop } catch {}
+    exit 1
+}
 function Write-Tit   { param($m) Write-Host "`n$m"      -ForegroundColor White -BackgroundColor DarkBlue }
 
 # Le uma linha do tty atual (funciona via "iwr | iex" tambem, pois o stdin do
@@ -98,6 +110,25 @@ try {
     [System.Net.WebRequest]::DefaultWebProxy = [System.Net.WebRequest]::GetSystemWebProxy()
     [System.Net.WebRequest]::DefaultWebProxy.Credentials = [System.Net.CredentialCache]::DefaultNetworkCredentials
 } catch {}
+
+# Verifica se PIP_CERT / REQUESTS_CA_BUNDLE foram setadas mas apontam para um
+# arquivo que nao existe. Sintoma classico: usuario seguiu a doc e copiou o
+# placeholder 'C:\caminho\proxy-root.pem' literalmente. Sem tratamento, o pip
+# falha logo na fase 3 com mensagem confusa.
+foreach ($var in @("PIP_CERT", "REQUESTS_CA_BUNDLE")) {
+    $valor = [Environment]::GetEnvironmentVariable($var, "Process")
+    if (-not $valor) { $valor = [Environment]::GetEnvironmentVariable($var, "User") }
+    if ($valor -and -not (Test-Path $valor)) {
+        Write-Warn2 "$var aponta para um caminho que nao existe: $valor"
+        Write-Info "Removendo $var desta sessao para o pip funcionar."
+        Remove-Item "Env:$var" -ErrorAction SilentlyContinue
+        $persistente = [Environment]::GetEnvironmentVariable($var, "User")
+        if ($persistente) {
+            Write-Warn2 "Atencao: $var tambem esta gravada no perfil do usuario."
+            Write-Info "Para remover permanentemente (em outra sessao): [Environment]::SetEnvironmentVariable('$var', `$null, 'User')"
+        }
+    }
+}
 
 # 1) Pre-requisitos --------------------------------------------------------
 Write-Tit "1/6  Verificando pre-requisitos"
