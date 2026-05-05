@@ -193,21 +193,6 @@ curl -L -o mereo.zip https://github.com/arkhibr/mereo-implantacao/archive/refs/h
 
 Transfira o ZIP para a máquina-alvo, descompacte, renomeie a pasta para `mereo-implantacao` e rode o `install.ps1` de dentro dela. As dependências Python (`pip install -r requirements.txt`) ainda precisam de acesso ao PyPI — para verdadeiro air-gap, é preciso pré-baixar os wheels com `pip download -r requirements.txt -d wheels/` e instalar com `pip install --no-index --find-links wheels/ -r requirements.txt`.
 
-### Demo dirigida (apresentação ao vivo)
-
-Para mostrar o pipeline rodando passo a passo (com pausas explicativas entre cada etapa):
-
-```bash
-./demo.sh demo
-```
-
-O script roda os 3 comandos (`pilotar` → `validar` → `responder`) com narração e pausa entre cada um. Pressione Enter para avançar, Ctrl+C para abortar. Funciona em qualquer cliente que tenha `mapeamento.json` travado e `raw/` populado:
-
-```bash
-./demo.sh acme              # cliente acme
-./demo.sh acme --no-reset   # não limpa staging/output antes (útil pra rerun)
-```
-
 ### Variáveis de ambiente
 
 | Variável | Default | Função |
@@ -222,7 +207,36 @@ O `.env` é carregado automaticamente pelo `cli.py` (em qualquer SO).
 
 ---
 
-## Uso — passo a passo
+&nbsp;
+
+## 🎬 Demo — apresentação ao vivo
+
+> [!NOTE]
+> Use esta seção quando quiser **mostrar o pipeline rodando** com pausas explicativas, em treinamento ou apresentação. **Não é o fluxo de uso real com um cliente** — para isso veja a próxima seção.
+
+Para executar a demo:
+
+```bash
+./demo.sh demo
+```
+
+O script roda os 3 comandos (`pilotar` → `validar` → `responder`) com narração e pausa entre cada um. Pressione **Enter** para avançar, **Ctrl+C** para abortar. Funciona em qualquer cliente que tenha `mapeamento.json` travado e `raw/` populado:
+
+```bash
+./demo.sh acme              # cliente acme
+./demo.sh acme --no-reset   # não limpa staging/output antes (útil pra rerun)
+```
+
+---
+
+&nbsp;
+
+## 🚀 Uso real — implantação de um cliente
+
+> [!IMPORTANT]
+> **Esta é a seção principal do README.** Cobre o fluxo de ponta a ponta para um cliente real, do recebimento dos arquivos brutos até o output pronto pra importar na plataforma RHTec/Mereo.
+
+### Forma dos comandos
 
 Todos os comandos seguem `<wrapper> <comando> <cliente>`:
 - **Linux/macOS:** `./implantacao <comando> <cliente>`
