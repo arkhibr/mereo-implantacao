@@ -334,11 +334,13 @@ $pythonVenv = ".\.venv\Scripts\python.exe"
 # corrompido, deprecation) que com Stop global viram fatal. Trocamos pra
 # Continue durante chamadas pip e usamos $LASTEXITCODE como verdade.
 function Invoke-Pip {
-    param([string[]]$Args)
+    # IMPORTANTE: NAO usar $Args como nome — e variavel automatica do PowerShell
+    # e seria sombreada, fazendo o splat passar lista vazia. Use $PipArgs.
+    param([string[]]$PipArgs)
     $prev = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     try {
-        $saida = & $pythonVenv -m pip @Args 2>&1
+        $saida = & $pythonVenv -m pip @PipArgs 2>&1
         return @{ Saida = $saida; Codigo = $LASTEXITCODE }
     } finally {
         $ErrorActionPreference = $prev
@@ -422,7 +424,11 @@ else {
     }
     else {
         $env:CHAVE = $chave
-        # Here-string single-quoted (@'...'@) NAO interpola variaveis PowerShell.
+        # Por que arquivo temp em vez de "python -c <script>": PowerShell 5.1
+        # tem bug classico passando strings com aspas duplas pra processos
+        # nativos — as aspas sao stripadas, e o Python recebe 'arq = .env' em
+        # vez de 'arq = ".env"', quebrando com SyntaxError. Gravar arquivo
+        # temp e mais robusto e funciona em PS 5.1, 7+, cmd, etc.
         $script = @'
 import os, re
 arq = ".env"
@@ -434,8 +440,14 @@ else:
     texto = (texto.rstrip() + "\n" + nova + "\n") if texto else (nova + "\n")
 open(arq, "w", encoding="utf-8").write(texto)
 '@
-        & $python -c $script
-        Remove-Item env:CHAVE
+        $tmp = Join-Path $env:TEMP ("mereo-env-" + [guid]::NewGuid().ToString("N") + ".py")
+        Set-Content -LiteralPath $tmp -Value $script -Encoding UTF8
+        try {
+            & $pythonVenv $tmp
+        } finally {
+            Remove-Item $tmp -ErrorAction SilentlyContinue
+            Remove-Item env:CHAVE -ErrorAction SilentlyContinue
+        }
         Write-OK ".env configurado"
     }
 }
