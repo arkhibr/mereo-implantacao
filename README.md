@@ -25,6 +25,17 @@ Cada etapa pode ser rodada isoladamente. O agente **orquestrador** (LLM) inspeci
 
 ---
 
+## Atualização
+
+Se o pipeline já está instalado e houve uma atualização, basta puxar as mudanças — não é necessário rodar o instalador novamente:
+
+```bash
+cd mereo-implantacao
+git pull
+```
+
+---
+
 ## Instalação
 
 ### Modo recomendado: instalador automático
