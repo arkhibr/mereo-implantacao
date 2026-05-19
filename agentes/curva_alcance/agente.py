@@ -62,7 +62,7 @@ def executar(pasta_cliente: str) -> dict:
     df = df[df["Código da Meta*"].notna() & (df["Código da Meta*"].astype(str).str.strip() != "")]
 
     caminho_out = staging / "curva_alcance_transformada.csv"
-    df.to_csv(str(caminho_out), sep=";", index=False, encoding="utf-8")
+    df.to_csv(str(caminho_out), sep=";", index=False, encoding="utf-8-sig")
 
     resultado["dados"]["linhas_transformadas"] = len(df)
     resultado["dados"]["arquivos_gerados"] = [str(caminho_out)]

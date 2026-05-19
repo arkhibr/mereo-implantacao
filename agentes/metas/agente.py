@@ -95,7 +95,7 @@ def executar(pasta_cliente: str) -> dict:
         df = df[campos]
 
         caminho_out = staging / f"metas_{chave}_transformadas.csv"
-        df.to_csv(str(caminho_out), sep=";", index=False, encoding="utf-8")
+        df.to_csv(str(caminho_out), sep=";", index=False, encoding="utf-8-sig")
         contagens[tipo] = len(df)
         arquivos_gerados.append(str(caminho_out))
 

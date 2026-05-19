@@ -68,7 +68,7 @@ def construir_registro(pasta_cliente: str, sessao=None) -> RegistroTools:
             caminho = base / staging_rel
             if not caminho.exists():
                 return None
-            df = pd.read_csv(str(caminho), sep=";", encoding="utf-8", dtype=str)
+            df = pd.read_csv(str(caminho), sep=";", encoding="utf-8-sig", dtype=str)
             cache_df[entidade] = df
             return df
         return None

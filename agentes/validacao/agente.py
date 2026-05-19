@@ -69,7 +69,7 @@ def executar(pasta_cliente: str, pasta_templates: str = None) -> dict:
             resumo.append({"entidade": chave_tabela, "status": "ausente", "linhas": 0, "achados": 0})
             continue
 
-        df = pd.read_csv(str(caminho_staging), sep=";", encoding="utf-8", dtype=str)
+        df = pd.read_csv(str(caminho_staging), sep=";", encoding="utf-8-sig", dtype=str)
         tabelas[chave_tabela] = df
 
         achados_entidade = []

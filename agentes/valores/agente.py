@@ -68,7 +68,7 @@ def executar(pasta_cliente: str) -> dict:
         staging = base / STAGING_DIRS[tipo]
         staging.mkdir(parents=True, exist_ok=True)
         caminho_out = staging / f"valores_{tipo}_transformados.csv"
-        df.to_csv(str(caminho_out), sep=";", index=False, encoding="utf-8")
+        df.to_csv(str(caminho_out), sep=";", index=False, encoding="utf-8-sig")
 
         contagens[tipo] = len(df)
         arquivos_gerados.append(str(caminho_out))

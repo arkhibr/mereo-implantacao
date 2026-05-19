@@ -120,7 +120,7 @@ def executar(pasta_cliente: str, grupo_permissoes_padrao: str = "GRP_PADRAO",
     df = df[TODOS_CAMPOS]
 
     caminho_out = staging / "colaboradores_transformados.csv"
-    df.to_csv(str(caminho_out), sep=";", index=False, encoding="utf-8")
+    df.to_csv(str(caminho_out), sep=";", index=False, encoding="utf-8-sig")
 
     resultado["dados"]["linhas_transformadas"] = len(df)
     resultado["dados"]["arquivos_gerados"] = [str(caminho_out)]

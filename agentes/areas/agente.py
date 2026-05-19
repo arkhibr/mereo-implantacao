@@ -95,7 +95,7 @@ def executar(pasta_cliente: str, codigo_filial_padrao: str = "1") -> dict:
     construir_dicionario.salvar(res_dic["dados"]["dicionario"], str(caminho_dic))
 
     caminho_out = staging / "areas_transformadas.csv"
-    df.to_csv(str(caminho_out), sep=";", index=False, encoding="utf-8")
+    df.to_csv(str(caminho_out), sep=";", index=False, encoding="utf-8-sig")
 
     resultado["dados"]["linhas_transformadas"] = len(df)
     resultado["dados"]["arquivos_gerados"] = [str(caminho_out), str(caminho_dic)]
