@@ -18,6 +18,8 @@ from agentes.indicadores    import agente as ag_indicadores
 from agentes.metas          import agente as ag_metas
 from agentes.curva_alcance  import agente as ag_curva_alcance
 from agentes.valores        import agente as ag_valores
+from agentes.competencias   import agente as ag_competencias
+from agentes.formularios     import agente as ag_formularios
 from agentes.validacao      import agente as ag_validacao
 from nucleo import visual
 from nucleo import grupos
@@ -39,6 +41,8 @@ _MODULOS_CARGA = {
     "metas":         (ag_metas,         "Transformando metas..."),
     "curva_alcance": (ag_curva_alcance, "Transformando curva de alcance..."),
     "valores":       (ag_valores,       "Transformando valores..."),
+    "competencias":  (ag_competencias,  "Transformando competências e fatores..."),
+    "formularios":   (ag_formularios,   "Montando formulários de avaliação..."),
 }
 
 # Staging do núcleo — usado só para o aviso soft (não é gate). Espelha o

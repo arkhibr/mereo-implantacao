@@ -32,6 +32,10 @@ STAGING_PARA_TEMPLATE = {
         ("Import_Metas Projeto.csv", "metas_projeto"),
     "staging/07_curva_alcance/curva_alcance_transformada.csv":
         ("Import_Curva de Alcance.csv", "curva_alcance"),
+    "staging/08_competencias/competencias_transformadas.csv":
+        ("Import_Competências (Catálogo).csv", "competencias"),
+    "staging/09_formularios/formularios_transformados.csv":
+        ("Import_Formulários de Avaliação.csv", "formularios"),
 }
 
 REFERENCIAS = [
@@ -43,12 +47,18 @@ REFERENCIAS = [
      "tabela_destino": "colaboradores",    "coluna_pk": "Login*", "obrigatorio": True},
     {"tabela_origem": "metas_individuais", "coluna_fk": "Código do Indicador *",
      "tabela_destino": "indicadores",      "coluna_pk": "Código do Indicador *", "obrigatorio": True},
+    {"tabela_origem": "formularios", "coluna_fk": "Código da Competência",
+     "tabela_destino": "competencias", "coluna_pk": "Código da Competência", "obrigatorio": True},
+    {"tabela_origem": "formularios", "coluna_fk": "Código do Fator de Avaliação",
+     "tabela_destino": "competencias", "coluna_pk": "Código do Fator de Avaliação", "obrigatorio": True},
 ]
 
 CHAVES_UNICAS = {
     "areas":         "Código da Área*",
     "colaboradores": "Login*",
     "indicadores":   "Código do Indicador *",
+    # No modelo fator-espelho cada competência tem um único fator → código único.
+    "competencias":  "Código do Fator de Avaliação",
 }
 
 

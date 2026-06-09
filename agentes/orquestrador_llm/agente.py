@@ -21,6 +21,8 @@ from agentes.indicadores   import agente as ag_indicadores
 from agentes.metas         import agente as ag_metas
 from agentes.curva_alcance import agente as ag_curva_alcance
 from agentes.valores       import agente as ag_valores
+from agentes.competencias  import agente as ag_competencias
+from agentes.formularios   import agente as ag_formularios
 from nucleo.hitl import HITLPausaSolicitada, construir_tool_hitl
 from nucleo.registro_tools import RegistroTools, Tool
 from nucleo.runner import executar_agente
@@ -30,7 +32,7 @@ from nucleo import grupos
 
 BASE_PROJETO = Path(__file__).parent.parent.parent
 
-# 6 transformações determinísticas que o orquestrador roda direto.
+# Transformações determinísticas que o orquestrador roda direto.
 ETAPAS_DETERMINISTAS = {
     "areas":          ag_areas,
     "colaboradores":  ag_colaboradores,
@@ -38,6 +40,8 @@ ETAPAS_DETERMINISTAS = {
     "metas":          ag_metas,
     "curva_alcance":  ag_curva_alcance,
     "valores":        ag_valores,
+    "competencias":   ag_competencias,
+    "formularios":    ag_formularios,
 }
 
 # Agentes LLM que devem ser delegados via HITL — não são invocados em-processo.
