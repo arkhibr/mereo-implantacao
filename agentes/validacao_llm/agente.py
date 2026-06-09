@@ -107,8 +107,9 @@ def construir_registro(pasta_cliente: str, sessao=None) -> RegistroTools:
             return {"status": "erro", "erros": [f"Entidade desconhecida: {entidade}"]}
 
         achados = []
-        caminho_tmpl = TEMPLATES_DIR / nome_template
-        if caminho_tmpl.exists():
+        from nucleo import templates as _tpl
+        caminho_tmpl = _tpl.localizar(TEMPLATES_DIR, nome_template)
+        if caminho_tmpl:
             schema = validar_schema.schema_do_template(str(caminho_tmpl))
             res_schema = validar_schema.validar(df, schema)
             achados.extend(res_schema["dados"]["achados"])

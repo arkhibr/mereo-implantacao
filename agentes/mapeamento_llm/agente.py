@@ -98,9 +98,10 @@ def construir_registro(pasta_cliente: str, sessao=None) -> RegistroTools:
 
     def t_entidades() -> dict:
         entidades = {}
+        from nucleo import templates as _tpl
         for nome_arquivo, chave in TEMPLATES_ENTIDADES.items():
-            caminho = TEMPLATES_DIR / nome_arquivo
-            if not caminho.exists():
+            caminho = _tpl.localizar(TEMPLATES_DIR, nome_arquivo)
+            if not caminho:
                 continue
             df = pd.read_csv(str(caminho), sep=";", nrows=0, encoding="latin-1")
             campos = []

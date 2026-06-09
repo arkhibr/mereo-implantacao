@@ -192,9 +192,10 @@ def _carregar_templates(pasta: Path) -> dict:
         "Import_Metas Projeto.csv": "metas_projeto",
         "Import_Curva de Alcance.csv": "curva_alcance",
     }
+    from nucleo import templates as _tpl
     for nome_arquivo, chave in mapa_nomes.items():
-        caminho = pasta / nome_arquivo
-        if caminho.exists():
+        caminho = _tpl.localizar(pasta, nome_arquivo)
+        if caminho:
             import pandas as pd
             df = pd.read_csv(str(caminho), sep=";", nrows=0, encoding="latin-1")
             templates[chave] = list(df.columns)

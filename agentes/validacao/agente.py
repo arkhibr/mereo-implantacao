@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from ferramentas.exportacao import validar_schema, validar_referencias
 from ferramentas.qualidade import duplicatas
+from nucleo import templates as _tpl
 
 TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates"
 
@@ -75,8 +76,8 @@ def executar(pasta_cliente: str, pasta_templates: str = None) -> dict:
         achados_entidade = []
 
         # Validação de schema
-        caminho_tmpl = templates_path / nome_template
-        if caminho_tmpl.exists():
+        caminho_tmpl = _tpl.localizar(templates_path, nome_template)
+        if caminho_tmpl:
             schema = validar_schema.schema_do_template(str(caminho_tmpl))
             res_schema = validar_schema.validar(df, schema)
             achados_entidade.extend(res_schema["dados"]["achados"])
