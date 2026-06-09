@@ -25,6 +25,7 @@ from nucleo.hitl import HITLPausaSolicitada, construir_tool_hitl
 from nucleo.registro_tools import RegistroTools, Tool
 from nucleo.runner import executar_agente
 from nucleo.sessoes import Sessao
+from nucleo import grupos
 
 
 BASE_PROJETO = Path(__file__).parent.parent.parent
@@ -68,6 +69,62 @@ STAGING_ENTIDADES = {
     "metas_projeto":        "staging/06_metas_projeto/metas_projeto_transformadas.csv",
     "curva_alcance":        "staging/07_curva_alcance/curva_alcance_transformada.csv",
 }
+
+# Etapa (agente de transformação) → entidades de staging que ela produz. Usado
+# para dizer se cada etapa de um grupo já tem staging. `valores` não tem entidade
+# rastreável (espelha a validação, que só cobre CSVs) — fica como não rastreável.
+ETAPA_STAGING = {
+    "areas":         ["areas"],
+    "colaboradores": ["colaboradores"],
+    "indicadores":   ["indicadores"],
+    "metas":         ["metas_individuais", "metas_compartilhadas", "metas_projeto"],
+    "curva_alcance": ["curva_alcance"],
+    "valores":       [],
+}
+
+
+def _etapa_em_staging(base: Path, etapa: str) -> bool | None:
+    """True/False se a etapa tem staging; None se a etapa não é rastreável."""
+    entidades = ETAPA_STAGING.get(etapa, [])
+    if not entidades:
+        return None
+    return any((base / STAGING_ENTIDADES[e]).exists()
+               for e in entidades if e in STAGING_ENTIDADES)
+
+
+def _estado_grupos(base: Path) -> dict:
+    """Visão modular do estado: cada grupo de carga, suas etapas, se já tem
+    staging e se suas dependências (o núcleo) estão satisfeitas. Informativo —
+    o orquestrador decide com julgamento; nada aqui bloqueia."""
+    em_staging: dict[str, bool] = {}
+    detalhe = []
+    for grupo in grupos.ordem_topologica():
+        info = grupos.GRUPOS[grupo]
+        etapas = []
+        rastreaveis_ok = True
+        tem_rastreavel = False
+        for etapa in info["etapas"]:
+            st = _etapa_em_staging(base, etapa)
+            etapas.append({"etapa": etapa, "em_staging": st})
+            if st is not None:
+                tem_rastreavel = True
+                rastreaveis_ok = rastreaveis_ok and st
+        grupo_ok = tem_rastreavel and rastreaveis_ok
+        em_staging[grupo] = grupo_ok
+        deps = grupos.GRUPOS[grupo].get("depende_de", [])
+        detalhe.append({
+            "grupo": grupo,
+            "titulo": info["titulo"],
+            "seminal": bool(info.get("seminal")),
+            "depende_de": deps,
+            "etapas": etapas,
+            "em_staging": grupo_ok,
+            "dependencias_satisfeitas": all(em_staging.get(d, False) for d in deps),
+        })
+    return {
+        "grupos": detalhe,
+        "nucleo_pronto": em_staging.get(grupos.GRUPO_SEMINAL, False),
+    }
 
 
 def construir_registro(pasta_cliente: str, sessao: Sessao | None = None) -> RegistroTools:
@@ -161,6 +218,31 @@ def construir_registro(pasta_cliente: str, sessao: Sessao | None = None) -> Regi
                 "outputs_existentes": outputs,
                 "output_de_hoje_existe": any(o["data"] == output_hoje for o in outputs),
                 "tem_relatorio_validacao": tem_relatorio_validacao,
+                **_estado_grupos(base),
+            },
+        }
+
+    def t_listar_grupos() -> dict:
+        return {
+            "status": "ok",
+            "dados": {
+                "modelo": (
+                    "Cargas são grandes grupos com dependência radial: o núcleo "
+                    "(pessoas, áreas, hierarquias) é a base seminal; cada grupo "
+                    "predicado depende dele."
+                ),
+                "ordem": grupos.ordem_topologica(),
+                "grupos": [
+                    {
+                        "grupo": g,
+                        "titulo": grupos.GRUPOS[g]["titulo"],
+                        "descricao": grupos.GRUPOS[g]["descricao"],
+                        "seminal": bool(grupos.GRUPOS[g].get("seminal")),
+                        "depende_de": grupos.GRUPOS[g].get("depende_de", []),
+                        "etapas": grupos.GRUPOS[g]["etapas"],
+                    }
+                    for g in grupos.ordem_topologica()
+                ],
             },
         }
 
@@ -298,6 +380,17 @@ def construir_registro(pasta_cliente: str, sessao: Sessao | None = None) -> Regi
         ),
         input_schema={"type": "object", "properties": {}},
         funcao=t_inspecionar,
+        paralela=True,
+    ))
+    registro.registrar(Tool(
+        nome="listar_grupos",
+        descricao=(
+            "Lista os grupos de carga e suas dependências (a arquitetura modular). "
+            "Use para entender quais módulos existem, qual é o núcleo seminal e quais "
+            "etapas pertencem a cada grupo. Não toca em disco do cliente."
+        ),
+        input_schema={"type": "object", "properties": {}},
+        funcao=t_listar_grupos,
         paralela=True,
     ))
     registro.registrar(Tool(

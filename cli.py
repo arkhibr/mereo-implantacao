@@ -7,6 +7,8 @@ Uso:
   ./implantacao analisar    <cliente>
   ./implantacao transformar <cliente>
   ./implantacao rodar       <cliente>
+  ./implantacao grupos                                  (lista os módulos de carga)
+  ./implantacao grupo       <grupo> <cliente>           (roda um módulo: nucleo, indicadores, metas)
   ./implantacao demo        <cliente>                   (agente LLM de validação)
   ./implantacao diagnosticar <cliente>                  (agente LLM de diagnóstico)
   ./implantacao mapear      <cliente>                   (agente LLM de mapeamento)
@@ -80,6 +82,8 @@ SUBCOMANDOS = {
     "analisar":     ("diagnostico",  "Roda diagnóstico determinista e gera mapeamento automático"),
     "transformar":  ("transformacao","Transforma os dados e gera o output final"),
     "rodar":        ("completo",     "Pipeline completo (analisar + transformar)"),
+    "grupos":       ("listar_grupos","Lista os módulos de carga e suas dependências"),
+    "grupo":        ("rodar_grupo",  "Roda um módulo de carga (nucleo, indicadores, metas)"),
     "demo":         ("agente_llm",   "Roda o agente LLM de demonstração (validação da infra)"),
     "diagnosticar": ("agente_llm",   "Roda o agente LLM de diagnóstico (substitui o determinista quando estabilizado)"),
     "mapear":       ("agente_llm",   "Roda o agente LLM de mapeamento (substitui o determinista quando estabilizado)"),
@@ -109,6 +113,57 @@ def criar_cliente(nome: str) -> Path:
     print(f"\n  ✓ Estrutura criada para '{nome}'")
     print(f"  Deposite os arquivos do cliente em:  clientes/{nome}/raw/\n")
     return destino
+
+
+def listar_grupos_cli():
+    sys.path.insert(0, str(BASE))
+    from nucleo import grupos
+    v = _visual()
+    print()
+    print(v.titulo("MÓDULOS DE CARGA"))
+    print(v.fraco("  Núcleo (base seminal) ← grupos predicados."))
+    print(v.fraco("  O consultor decide quando a base está pronta; a ferramenta apenas avisa."))
+    print()
+    for g in grupos.ordem_topologica():
+        info = grupos.GRUPOS[g]
+        marca = "◆" if info.get("seminal") else "◇"
+        deps = info.get("depende_de", [])
+        dep_txt = "depende de: " + ", ".join(deps) if deps else "base seminal"
+        print(f"  {marca} {v.comando(g)}  {info['titulo']}  {v.fraco('(' + dep_txt + ')')}")
+        print(f"      {v.fraco('etapas: ' + ', '.join(info['etapas']))}")
+    print()
+    print(v.fraco("  Rodar um módulo:  ") + v.comando("./implantacao grupo nucleo <cliente>"))
+    print()
+
+
+def rodar_grupo(pasta: Path, nome_grupo: str):
+    sys.path.insert(0, str(BASE))
+    from nucleo import grupos
+    if nome_grupo not in grupos.GRUPOS:
+        _erro(
+            f"Grupo desconhecido: {nome_grupo!r}.  "
+            f"Válidos: {', '.join(grupos.ordem_topologica())}.\n"
+            f"  Para listar:  ./implantacao grupos"
+        )
+
+    info = grupos.GRUPOS[nome_grupo]
+    escopo = grupos.etapas_do_grupo(nome_grupo)
+    v = _visual()
+    print()
+    print(v.cabecalho(
+        largura=v.largura_terminal(default=60),
+        Cliente=pasta.name,
+        Etapa=f"Módulo: {info['titulo']}",
+        Iniciado=v.agora(),
+    ))
+    print()
+
+    from agentes.orquestrador import agente as orc
+    resultado = orc.executar(str(pasta), escopo=escopo)
+    _imprimir_resultado(resultado)
+
+    status = resultado.get("status", "erro")
+    sys.exit(0 if status in ("ok", "aviso") else 1)
 
 
 def rodar_etapa(pasta: Path, etapa: str):
@@ -308,6 +363,10 @@ _CATEGORIAS_AJUDA = [
         ("transformar",  "<cliente>",          "Roda transformações + validação"),
         ("rodar",        "<cliente>",          "Pipeline completo (analisar + transformar)"),
     ]),
+    ("CARGAS POR MÓDULO", [
+        ("grupos",       "",                   "Lista os módulos e suas dependências"),
+        ("grupo",        "<grupo> <cliente>",  "Roda um módulo (nucleo, indicadores, metas)"),
+    ]),
     ("AGENTES LLM", [
         ("diagnosticar", "<cliente>",          "Diagnóstico"),
         ("mapear",       "<cliente>",          "Mapeamento"),
@@ -387,6 +446,26 @@ def main():
         print(f"\n{v.error(f'Comando desconhecido: ' + repr(cmd))}", file=sys.stderr)
         _ajuda_compacta()
         sys.exit(1)
+
+    # 'grupos' não recebe cliente — lista a estrutura modular e sai.
+    if cmd == "grupos":
+        listar_grupos_cli()
+        return
+
+    # 'grupo' tem layout próprio: <grupo> <cliente>.
+    if cmd == "grupo":
+        if len(sys.argv) < 4:
+            _erro(
+                "Uso: ./implantacao grupo <grupo> <cliente>\n"
+                "  Para listar os grupos:  ./implantacao grupos"
+            )
+        nome_grupo = sys.argv[2]
+        nome_cli = sys.argv[3]
+        pasta_cli = CLIENTES_DIR / nome_cli
+        if not pasta_cli.exists():
+            _erro(f"Cliente '{nome_cli}' não encontrado.\n  Para criar:  ./implantacao novo {nome_cli}")
+        rodar_grupo(pasta_cli, nome_grupo)
+        return
 
     if len(sys.argv) < 3:
         _erro(f"Informe o nome do cliente.  Ex: ./implantacao {cmd} nome-do-cliente")
