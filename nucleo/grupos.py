@@ -60,6 +60,21 @@ GRUPOS: dict[str, dict] = {
         "depende_de": ["nucleo"],
         "etapas": ["metas", "curva_alcance", "valores"],
     },
+    "competencias": {
+        "titulo": "Competências",
+        "descricao": (
+            "Competências/fatores e os formulários de avaliação que as associam "
+            "(com pesos), predicados sobre o núcleo. No módulo da plataforma só "
+            "estes dois cadastros são importáveis; os demais (tipo de avaliador, "
+            "tipo do ciclo, método de cálculo, cardápio de ações do PDI) são "
+            "manuais e ficam fora do pipeline."
+        ),
+        "seminal": False,
+        "depende_de": ["nucleo"],
+        # Ordem de domínio: o formulário referencia competências já cadastradas,
+        # então o catálogo precede a gestão de formulários.
+        "etapas": ["competencias", "formularios"],
+    },
 }
 
 

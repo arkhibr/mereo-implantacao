@@ -49,9 +49,18 @@ _NUCLEO_STAGING = {
 }
 
 
+# Etapas de carga que já têm agente de transformação. Um grupo pode estar
+# registrado em grupos.py com etapas ainda sem agente (módulo recém-adicionado,
+# aguardando os templates) — essas etapas ficam de fora do pipeline executável
+# até o agente existir, mas continuam visíveis em `listar_grupos`.
+ETAPAS_IMPLEMENTADAS = set(_MODULOS_CARGA)
+
+
 def _montar_pipeline():
     seq = list(_SETUP)
     for etapa in grupos.etapas_em_ordem():
+        if etapa not in _MODULOS_CARGA:
+            continue
         modulo, msg = _MODULOS_CARGA[etapa]
         seq.append((etapa, modulo, msg))
     seq.extend(_FINAL)

@@ -39,15 +39,25 @@ def test_ordem_topologica_poe_nucleo_primeiro():
 def test_etapas_em_ordem_comeca_pelo_nucleo():
     etapas = grupos.etapas_em_ordem()
     assert etapas[:2] == ["areas", "colaboradores"]
-    # Todas as 6 transformações estão presentes, sem repetição.
-    assert sorted(etapas) == sorted(
-        ["areas", "colaboradores", "indicadores", "metas", "curva_alcance", "valores"]
-    )
-    assert len(etapas) == len(set(etapas))
+    assert len(etapas) == len(set(etapas))  # sem repetição
+    # O núcleo precede todos os predicados.
+    for predicado in ["indicadores", "metas", "curva_alcance", "valores",
+                      "competencias", "formularios"]:
+        assert etapas.index("areas") < etapas.index(predicado)
 
 
 def test_metas_agrega_curva_e_valores():
     assert grupos.etapas_do_grupo("metas") == ["metas", "curva_alcance", "valores"]
+
+
+def test_competencias_predicado_sobre_nucleo():
+    assert "competencias" in grupos.GRUPOS
+    assert grupos.GRUPOS["competencias"]["seminal"] is False
+    assert grupos.dependencias_de("competencias") == ["nucleo"]
+    # Catálogo precede formulários (formulário referencia competências).
+    etapas = grupos.etapas_do_grupo("competencias")
+    assert etapas == ["competencias", "formularios"]
+    assert grupos.grupo_de_etapa("formularios") == "competencias"
 
 
 def test_grupo_de_etapa():
@@ -116,16 +126,16 @@ def test_validar_rejeita_etapa_repetida_entre_grupos():
 def test_grupo_novo_se_encaixa_sem_tocar_nos_existentes():
     """Acrescentar um grupo predicado é só uma entrada apontando para o núcleo."""
     estendido = dict(grupos.GRUPOS)
-    estendido["competencias"] = {
-        "titulo": "Competências",
+    estendido["engajamento"] = {
+        "titulo": "Engajamento",
         "descricao": "teste",
         "seminal": False,
         "depende_de": ["nucleo"],
-        "etapas": ["competencias"],
+        "etapas": ["engajamento"],
     }
     grupos._validar(estendido)  # registro estendido continua válido
     ordem = grupos.ordem_topologica(estendido)
     assert ordem[0] == "nucleo"
-    assert "competencias" in ordem
-    assert ordem.index("competencias") > ordem.index("nucleo")
-    assert grupos.dependencias_de("competencias", estendido) == ["nucleo"]
+    assert "engajamento" in ordem
+    assert ordem.index("engajamento") > ordem.index("nucleo")
+    assert grupos.dependencias_de("engajamento", estendido) == ["nucleo"]

@@ -124,13 +124,18 @@ def listar_grupos_cli():
     print(v.fraco("  Núcleo (base seminal) ← grupos predicados."))
     print(v.fraco("  O consultor decide quando a base está pronta; a ferramenta apenas avisa."))
     print()
+    from agentes.orquestrador import agente as orc
     for g in grupos.ordem_topologica():
         info = grupos.GRUPOS[g]
         marca = "◆" if info.get("seminal") else "◇"
         deps = info.get("depende_de", [])
         dep_txt = "depende de: " + ", ".join(deps) if deps else "base seminal"
         print(f"  {marca} {v.comando(g)}  {info['titulo']}  {v.fraco('(' + dep_txt + ')')}")
-        print(f"      {v.fraco('etapas: ' + ', '.join(info['etapas']))}")
+        etapas_fmt = [
+            e if e in orc.ETAPAS_IMPLEMENTADAS else f"{e} (a implementar)"
+            for e in info["etapas"]
+        ]
+        print(f"      {v.fraco('etapas: ' + ', '.join(etapas_fmt))}")
     print()
     print(v.fraco("  Rodar um módulo:  ") + v.comando("./implantacao grupo nucleo <cliente>"))
     print()
@@ -159,7 +164,24 @@ def rodar_grupo(pasta: Path, nome_grupo: str):
     print()
 
     from agentes.orquestrador import agente as orc
-    resultado = orc.executar(str(pasta), escopo=escopo)
+    implementadas = [e for e in escopo if e in orc.ETAPAS_IMPLEMENTADAS]
+    nao_impl = [e for e in escopo if e not in orc.ETAPAS_IMPLEMENTADAS]
+
+    if not implementadas:
+        print(v.warning(
+            f"  Módulo '{info['titulo']}' está registrado na arquitetura, mas seus "
+            "agentes de transformação ainda não foram implementados."
+        ))
+        print(v.fraco(f"  Etapas previstas (a implementar): {', '.join(escopo)}"))
+        print(v.fraco("  Faltam os templates de import deste módulo para construir os agentes."))
+        print()
+        sys.exit(0)
+
+    if nao_impl:
+        print(v.fraco(f"  Etapas ainda não implementadas, ignoradas: {', '.join(nao_impl)}"))
+        print()
+
+    resultado = orc.executar(str(pasta), escopo=implementadas)
     _imprimir_resultado(resultado)
 
     status = resultado.get("status", "erro")

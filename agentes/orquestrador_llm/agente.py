@@ -112,6 +112,9 @@ def _estado_grupos(base: Path) -> dict:
         grupo_ok = tem_rastreavel and rastreaveis_ok
         em_staging[grupo] = grupo_ok
         deps = grupos.GRUPOS[grupo].get("depende_de", [])
+        # Grupo só é acionável se todas as suas etapas têm agente determinístico.
+        # Grupos recém-registrados (ex.: aguardando templates) ficam implementado=False.
+        implementado = all(e in ETAPAS_DETERMINISTAS for e in info["etapas"])
         detalhe.append({
             "grupo": grupo,
             "titulo": info["titulo"],
@@ -120,6 +123,7 @@ def _estado_grupos(base: Path) -> dict:
             "etapas": etapas,
             "em_staging": grupo_ok,
             "dependencias_satisfeitas": all(em_staging.get(d, False) for d in deps),
+            "implementado": implementado,
         })
     return {
         "grupos": detalhe,
@@ -240,6 +244,10 @@ def construir_registro(pasta_cliente: str, sessao: Sessao | None = None) -> Regi
                         "seminal": bool(grupos.GRUPOS[g].get("seminal")),
                         "depende_de": grupos.GRUPOS[g].get("depende_de", []),
                         "etapas": grupos.GRUPOS[g]["etapas"],
+                        "implementado": all(
+                            e in ETAPAS_DETERMINISTAS
+                            for e in grupos.GRUPOS[g]["etapas"]
+                        ),
                     }
                     for g in grupos.ordem_topologica()
                 ],
