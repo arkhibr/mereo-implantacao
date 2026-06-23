@@ -32,15 +32,28 @@ class TestExtracaoMatriz:
         assert list(r["formularios"][0].keys()) == cm.COLUNAS_FORMULARIO
 
     def test_fator_espelho_1_para_1(self):
-        """Cada competência gera exatamente um fator de mesmo nome (espelho)."""
+        """Cada competência gera exatamente um fator (espelho de códigos 1:1)."""
         r = cm.extrair(AGRO)
         for linha in r["catalogo"]:
-            assert linha["Nome da competência"] == linha["Nome do Fator de Avaliação"]
             assert linha["Código da Competência"].startswith("CPT")
             assert linha["Código do Fator de Avaliação"].startswith("FT")
+            # mesmo índice no par CPT##/FT## (espelho)
+            assert linha["Código da Competência"][3:] == linha["Código do Fator de Avaliação"][2:]
         # 1 linha por competência → códigos de competência únicos
         cpts = [l["Código da Competência"] for l in r["catalogo"]]
         assert len(cpts) == len(set(cpts))
+
+    def test_posicionamento_do_conteudo_no_catalogo(self):
+        """Feedback Mereo (2026-06-23): C vazia; F = definição da competência;
+        G = comportamentos observáveis (≥1 nível concatenado)."""
+        r = cm.extrair(CORP)
+        comp = next(l for l in r["catalogo"] if l["Nome da competência"] == "Comprometimento")
+        assert comp["Descrição da Competencia"] == ""
+        assert comp["Nome do Fator de Avaliação"].startswith("Capacidade de cumprir")
+        g = comp["Descrição do Fator de Avaliação"]
+        assert g.strip() != ""
+        # os 4 níveis da escala vêm empilhados numa célula
+        assert len(g.split(cm.SEP_COMPORTAMENTOS)) == 4
 
     def test_peso_convertido_e_replicado_nos_avaliadores(self):
         r = cm.extrair(AGRO)
@@ -48,7 +61,8 @@ class TestExtracaoMatriz:
         linha = next(l for l in r["formularios"]
                      if l["Descrição"] == "Operacional" and l["Código do Fator de Avaliação"] == "FT01")
         assert linha["AUTO"] == 20 and linha["LIDER"] == 20
-        assert linha["PAR"] == "" and linha["COMITÊ"] == "" and linha["FORNECEDOR"] == ""
+        # avaliadores não usados vão 0 (obrigatório p/ importar), não vazio
+        assert linha["PAR"] == 0 and linha["COMITÊ"] == 0 and linha["FORNECEDOR"] == 0
 
     def test_integridade_referencial_interna(self):
         """Todo fator citado nos formulários existe no catálogo."""
@@ -61,11 +75,13 @@ class TestExtracaoMatriz:
 
     def test_descricao_capturada_mesmo_com_aba_de_nome_divergente(self):
         """'Negociação' vive na aba 'Comprador e Controlador Manut.' (nome ≠ cargo
-        'Comprador e Controlador de Manutenção'); a definição ainda é capturada."""
+        'Comprador e Controlador de Manutenção'); definição e comportamentos ainda
+        são capturados."""
         r = cm.extrair(CORP)
         neg = next(l for l in r["catalogo"] if l["Nome da competência"] == "Negociação")
-        assert neg["Descrição do Fator de Avaliação"].strip() != ""
-        assert r["avisos"] == []  # sem competência órfã de descrição
+        assert neg["Nome do Fator de Avaliação"].strip() != ""        # definição
+        assert neg["Descrição do Fator de Avaliação"].strip() != ""   # comportamentos
+        assert r["avisos"] == []  # sem competência órfã de definição/comportamentos
 
     def test_soma_de_pesos_por_cargo(self):
         r = cm.extrair(AGRO)
