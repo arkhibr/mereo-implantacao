@@ -34,6 +34,18 @@ cd mereo-implantacao
 git pull
 ```
 
+Confira a versão instalada rodando `./implantacao` (aparece ao lado do nome) ou:
+
+```bash
+git pull && ./implantacao grupos
+```
+
+> [!NOTE]
+> **v0.2.0 — módulo de Competências.** Esta atualização adiciona o módulo de
+> competências (catálogo + formulários de avaliação), listado em
+> `./implantacao grupos`. Nenhuma dependência nova é necessária — o `git pull`
+> acima já habilita a feature.
+
 ---
 
 ## Instalação

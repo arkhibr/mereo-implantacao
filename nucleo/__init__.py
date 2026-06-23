@@ -11,4 +11,4 @@ aos agentes que dependem de julgamento (diagnostico, mapeamento,
 validacao, orquestrador) e os aciona via tool calls.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

@@ -8,7 +8,7 @@ Uso:
   ./implantacao transformar <cliente>
   ./implantacao rodar       <cliente>
   ./implantacao grupos                                  (lista os módulos de carga)
-  ./implantacao grupo       <grupo> <cliente>           (roda um módulo: nucleo, indicadores, metas)
+  ./implantacao grupo       <grupo> <cliente>           (roda um módulo: nucleo, indicadores, metas, competencias)
   ./implantacao demo        <cliente>                   (agente LLM de validação)
   ./implantacao diagnosticar <cliente>                  (agente LLM de diagnóstico)
   ./implantacao mapear      <cliente>                   (agente LLM de mapeamento)
@@ -83,7 +83,7 @@ SUBCOMANDOS = {
     "transformar":  ("transformacao","Transforma os dados e gera o output final"),
     "rodar":        ("completo",     "Pipeline completo (analisar + transformar)"),
     "grupos":       ("listar_grupos","Lista os módulos de carga e suas dependências"),
-    "grupo":        ("rodar_grupo",  "Roda um módulo de carga (nucleo, indicadores, metas)"),
+    "grupo":        ("rodar_grupo",  "Roda um módulo de carga (nucleo, indicadores, metas, competencias)"),
     "demo":         ("agente_llm",   "Roda o agente LLM de demonstração (validação da infra)"),
     "diagnosticar": ("agente_llm",   "Roda o agente LLM de diagnóstico (substitui o determinista quando estabilizado)"),
     "mapear":       ("agente_llm",   "Roda o agente LLM de mapeamento (substitui o determinista quando estabilizado)"),
@@ -387,7 +387,7 @@ _CATEGORIAS_AJUDA = [
     ]),
     ("CARGAS POR MÓDULO", [
         ("grupos",       "",                   "Lista os módulos e suas dependências"),
-        ("grupo",        "<grupo> <cliente>",  "Roda um módulo (nucleo, indicadores, metas)"),
+        ("grupo",        "<grupo> <cliente>",  "Roda um módulo (nucleo, indicadores, metas, competencias)"),
     ]),
     ("AGENTES LLM", [
         ("diagnosticar", "<cliente>",          "Diagnóstico"),
