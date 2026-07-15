@@ -31,8 +31,10 @@ def exportar(pasta_cliente, arquivos: dict, data: str = None) -> dict:
         if not src.exists():
             ausentes.append(nome_template)
             continue
-        # dtype=str preserva códigos como texto ("1" não vira 1.0 na planilha)
-        df = pd.read_csv(str(src), sep=";", encoding="utf-8-sig", dtype=str)
+        # dtype=str preserva códigos como texto ("1" não vira 1.0 na planilha);
+        # keep_default_na preserva o literal NULL (semântica da plataforma: remover valor)
+        df = pd.read_csv(str(src), sep=";", encoding="utf-8-sig", dtype=str,
+                         keep_default_na=False)
         nome_xlsx = Path(nome_template).stem + ".xlsx"
         df.to_excel(str(output / nome_xlsx), index=False, sheet_name="Plan1", engine="openpyxl")
         gerados.append(nome_xlsx)

@@ -72,6 +72,7 @@ REGRAS_CODIGOS = {
         "Código da Filial*":        {"tipo": "codigo", "max": 50},
         "Código da Área Superior":  {"tipo": "codigo", "max": 20},
         "Status da Área":           {"tipo": "dominio", "valores": _BINARIO},
+        "Login Responsável da Área": {"tipo": "codigo", "max": 50, "estrito": True},
     },
     "colaboradores": {
         "Login*":                          {"tipo": "codigo", "max": 50, "estrito": True},

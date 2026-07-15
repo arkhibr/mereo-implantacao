@@ -374,3 +374,154 @@ class TestCodigosSemPrefixo:
                          sep=";", encoding="utf-8-sig", dtype=str)
         assert df["Código do Indicador *"].iloc[0] == "SLA01"
         assert not (cliente_dir / "config" / "dicionario_indicadores.csv").exists()
+
+
+# ── metas: pilar estratégico ─────────────────────────────────────────────────
+
+class TestMetasPilar:
+
+    def test_pilar_default_dz001_quando_ausente(self, tmp_path):
+        avisos = []
+        df = pd.DataFrame({"Código da Meta *": ["M01"]})
+        r = ag_metas._classificar_e_transformar(df, "individual", {}, {}, {}, tmp_path,
+                                                avisos=avisos)
+        assert r["Código do Pilar Estratégico *"].iloc[0] == "DZ001"
+        assert any("DZ001" in av for av in avisos)
+
+    def test_pilar_de_para_manual_aplicado(self, tmp_path):
+        (tmp_path / "dicionario_pilares.csv").write_text(
+            "id_origem;id_destino\nMetas Setoriais;DZ001\n", encoding="utf-8")
+        df = pd.DataFrame({
+            "Código da Meta *": ["M01"],
+            "Código do Pilar Estratégico *": ["Metas Setoriais"],
+        })
+        r = ag_metas._classificar_e_transformar(df, "individual", {}, {}, {}, tmp_path)
+        assert r["Código do Pilar Estratégico *"].iloc[0] == "DZ001"
+
+    def test_pilar_texto_sem_de_para_mantido(self, tmp_path):
+        df = pd.DataFrame({
+            "Código da Meta *": ["M01"],
+            "Código do Pilar Estratégico *": ["Metas Setoriais"],
+        })
+        r = ag_metas._classificar_e_transformar(df, "individual", {}, {}, {}, tmp_path)
+        # mantém o texto — a validação de códigos bloqueia antes do output
+        assert r["Código do Pilar Estratégico *"].iloc[0] == "Metas Setoriais"
+
+    def test_pilar_nao_criado_em_compartilhada(self, tmp_path):
+        df = pd.DataFrame({"Código da Meta *": ["M01"]})
+        r = ag_metas._classificar_e_transformar(df, "compartilhada", {}, {}, {}, tmp_path)
+        assert "Código do Pilar Estratégico *" not in r.columns
+
+
+# ── colaboradores: grupo de permissões ───────────────────────────────────────
+
+class TestColaboradoresGrupoPermissao:
+
+    def _rodar(self, cliente_dir, df_raw):
+        from agentes.colaboradores import agente as ag_colab
+        df_raw.to_csv(cliente_dir / "colab.csv", sep=";", index=False, encoding="utf-8")
+        m = {"colaboradores": {"campos": [], "arquivo_sugerido": "colab.csv", "aba_sugerida": None}}
+        (cliente_dir / "config" / "mapeamento.json").write_text(json.dumps(m), encoding="utf-8")
+        res = ag_colab.executar(str(cliente_dir))
+        df = pd.read_csv(cliente_dir / "staging/02_colaboradores/colaboradores_transformados.csv",
+                         sep=";", encoding="utf-8-sig", dtype=str)
+        return df, res
+
+    def test_default_grp_4_quando_ausente(self, cliente_dir):
+        df, res = self._rodar(cliente_dir, pd.DataFrame({
+            "Login*": ["joao"], "Nome completo*": ["João"], "E-mail*": ["joao@x.com"],
+        }))
+        assert df["Código do Grupo de Permissões*"].iloc[0] == "GRP_4"
+
+    def test_de_para_manual_aplicado(self, cliente_dir):
+        (cliente_dir / "config" / "dicionario_grupos_permissao.csv").write_text(
+            "id_origem;id_destino\nAdministrador Global;GRP_4\n", encoding="utf-8")
+        df, res = self._rodar(cliente_dir, pd.DataFrame({
+            "Login*": ["joao"], "Nome completo*": ["João"], "E-mail*": ["joao@x.com"],
+            "Código do Grupo de Permissões*": ["Administrador Global"],
+        }))
+        assert df["Código do Grupo de Permissões*"].iloc[0] == "GRP_4"
+        assert any("grupos de permissão" in av for av in res["avisos"])
+
+
+# ── metas: geração de indicadores derivados ──────────────────────────────────
+
+class TestMetasIndicadoresDerivadosStaging:
+
+    def _rodar(self, cliente_dir, mapeamento_extra=None):
+        df = pd.DataFrame({
+            "Código da Meta *": ["FIN01", "FIN02"],
+            "Objetivo da Meta *": ["Aumentar vendas em 10%", "Reduzir custo operacional"],
+        })
+        df.to_csv(cliente_dir / "metas.csv", sep=";", index=False, encoding="utf-8")
+        m = {
+            "indicadores": {"campos": [], "arquivo_sugerido": None, "aba_sugerida": None},
+            "metas_individuais": {"campos": [], "arquivo_sugerido": "metas.csv", "aba_sugerida": None},
+            "metas_compartilhadas": {"campos": [], "arquivo_sugerido": None, "aba_sugerida": None},
+            "metas_projeto": {"campos": [], "arquivo_sugerido": None, "aba_sugerida": None},
+        }
+        if mapeamento_extra:
+            m.update(mapeamento_extra)
+        (cliente_dir / "config" / "mapeamento.json").write_text(json.dumps(m), encoding="utf-8")
+        return ag_metas.executar(str(cliente_dir))
+
+    def test_staging_indicadores_gerado_1_para_1(self, cliente_dir):
+        res = self._rodar(cliente_dir)
+        caminho = cliente_dir / "staging/03_indicadores/indicadores_transformados.csv"
+        assert caminho.exists()
+        df = pd.read_csv(caminho, sep=";", encoding="utf-8-sig", dtype=str)
+        assert df["Código do Indicador *"].tolist() == ["FIN01", "FIN02"]
+        assert df["Descrição do Indicador *"].iloc[0] == "Aumentar vendas em 10%"
+        # heurística de polaridade: vendas → maior melhor (1); custo → menor melhor (2)
+        assert df["Polaridade *"].tolist() == ["1", "2"]
+        assert df["Ativo *"].iloc[0] == "1"
+        assert res["dados"]["contagens"]["indicadores_derivados"] == 2
+
+    def test_nao_gera_quando_indicadores_mapeado(self, cliente_dir):
+        res = self._rodar(cliente_dir, {"indicadores": {
+            "campos": [], "arquivo_sugerido": "indicadores.csv", "aba_sugerida": None}})
+        assert not (cliente_dir / "staging/03_indicadores/indicadores_transformados.csv").exists()
+
+
+# ── áreas: login do responsável ──────────────────────────────────────────────
+
+class TestAreasLoginResponsavel:
+
+    def _rodar(self, cliente_dir, valores):
+        from agentes.areas import agente as ag_areas
+        df = pd.DataFrame({
+            "Código da Área*": [f"A{i}" for i in range(len(valores))],
+            "Descrição da Área*": ["X"] * len(valores),
+            "Login Responsável da Área": valores,
+        })
+        df.to_csv(cliente_dir / "areas.csv", sep=";", index=False, encoding="utf-8")
+        m = {"areas": {"campos": [], "arquivo_sugerido": "areas.csv", "aba_sugerida": None}}
+        (cliente_dir / "config" / "mapeamento.json").write_text(json.dumps(m), encoding="utf-8")
+        res = ag_areas.executar(str(cliente_dir))
+        out = pd.read_csv(cliente_dir / "staging/01_areas/areas_transformadas.csv",
+                          sep=";", encoding="utf-8-sig", dtype=str, keep_default_na=False)
+        return out["Login Responsável da Área"], res
+
+    def test_email_vira_login(self, cliente_dir):
+        logins, _ = self._rodar(cliente_dir, ["Maria.Santos@empresa.com.br"])
+        assert logins.iloc[0] == "maria.santos"
+
+    def test_nome_nao_vaza_fica_vazio_com_aviso(self, cliente_dir):
+        logins, res = self._rodar(cliente_dir, ["Maria Silva Santos"])
+        assert pd.isna(logins.iloc[0]) or str(logins.iloc[0]).strip() == ""
+        assert any("sem login derivável" in av for av in res["avisos"])
+
+    def test_null_literal_preservado(self, cliente_dir):
+        # "null"/"NULL" viram NaN na leitura (na_values do pandas); só variantes
+        # mistas como "Null" chegam ao agente — e devem sair como o literal NULL.
+        logins, _ = self._rodar(cliente_dir, ["Null"])
+        assert logins.iloc[0] == "NULL"
+
+    def test_login_simples_normalizado(self, cliente_dir):
+        logins, _ = self._rodar(cliente_dir, ["JSILVA"])
+        assert logins.iloc[0] == "jsilva"
+
+    def test_vazio_permanece_vazio(self, cliente_dir):
+        logins, res = self._rodar(cliente_dir, [None])
+        assert pd.isna(logins.iloc[0]) or str(logins.iloc[0]).strip() == ""
+        assert not any("sem login derivável" in av for av in res["avisos"])

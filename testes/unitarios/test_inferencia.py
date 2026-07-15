@@ -11,6 +11,7 @@ from ferramentas.inferencia.indicadores import (
     PLACEHOLDER,
     extrair_candidatos,
     inferir_polaridade,
+    inferir_unidade,
     montar_linha,
     normalizar_descricao,
 )
@@ -172,3 +173,36 @@ def test_montar_linha_derivado_de_trunca_lista_longa():
     cands = extrair_candidatos(metas, "cod", "desc")
     linha = montar_linha(cands[0], "raw/x.xlsx", "Metas")
     assert "10 no total" in linha["_derivado_de"]
+
+
+# ── inferência de unidade de medida ──────────────────────────────────────────
+
+class TestInferirUnidade:
+
+    def test_percentual(self):
+        assert inferir_unidade("Reduzir inadimplência para 2%") == "UM001"
+        assert inferir_unidade("Atingir 95 percentual de SLA") == "UM001"
+
+    def test_reais_simples(self):
+        assert inferir_unidade("Faturar R$ 500") == "UM002"
+
+    def test_reais_mil(self):
+        assert inferir_unidade("Receita de R$ 300 mil") == "UM003"
+
+    def test_reais_milhoes(self):
+        assert inferir_unidade("Faturar R$ 120 milhões") == "UM004"
+
+    def test_percentual_vence_reais(self):
+        assert inferir_unidade("Atingir 90% da meta de R$ 1 milhão") == "UM001"
+
+    def test_dias_horas(self):
+        assert inferir_unidade("Reduzir prazo médio para 5 dias") == "UM005"
+        assert inferir_unidade("Atendimento em até 2 horas") == "UM006"
+
+    def test_score(self):
+        assert inferir_unidade("Elevar score de crédito") == "UM012"
+
+    def test_sem_sinal_devolve_none(self):
+        assert inferir_unidade("Entregar 45 projetos") is None
+        assert inferir_unidade("") is None
+        assert inferir_unidade(None) is None

@@ -118,11 +118,11 @@ class TestMetasDominios:
         assert r["Tipo de Agregação *"].iloc[0] == "Ponderada"
         assert any("Tipo de Agregação" in av for av in avisos)
 
-    def test_indicador_derivado_sem_dicionario_gera_aviso(self, tmp_path):
+    def test_indicador_derivado_gera_aviso(self, tmp_path):
         avisos = []
         df = pd.DataFrame({"Código da Meta *": ["Faturamento Líquido Mensal"]})
         self._transformar(df, tmp_path, avisos=avisos)
-        assert any("dicionário de indicadores" in av for av in avisos)
+        assert any("derivado 1:1" in av for av in avisos)
 
 
 # ── agente de indicadores: normalização de domínios ──────────────────────────

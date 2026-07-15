@@ -11,11 +11,13 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from ferramentas.codificacao import aplicar_dicionario
+from ferramentas.inferencia.indicadores import inferir_polaridade, inferir_unidade
 from ferramentas.transformacao import normalizar_dominio, agregar_pipe
 from ferramentas.transformacao.dominios_plataforma import (
     EQUIVALENCIAS_AGREGACAO, EQUIVALENCIAS_DEFINICAO_VALOR,
 )
 from ferramentas.qualidade import erros_planilha
+from agentes.indicadores.agente import TODOS_CAMPOS as CAMPOS_INDICADORES
 
 CAMPOS_INDIVIDUAL = [
     "Código da Meta *", "Código da Área *", "Login do Responsável pela Meta *",
@@ -65,6 +67,7 @@ def executar(pasta_cliente: str) -> dict:
 
     contagens = {}
     arquivos_gerados = []
+    pares_indicadores = []
 
     for tipo in ["metas_individuais", "metas_compartilhadas", "metas_projeto"]:
         chave = TIPO_CHAVE[tipo]
@@ -84,10 +87,19 @@ def executar(pasta_cliente: str) -> dict:
             resultado["avisos"].append(f"{tipo}: {len(res_qual['dados']['achados'])} problema(s) nos dados brutos.")
 
         df = _aplicar_mapeamento(df_raw, conf.get("campos", []))
+        derivou_indicador = chave in ("individual", "projeto") and (
+            "Código do Indicador *" not in df.columns or df["Código do Indicador *"].isna().all()
+        )
         avisos_transf = []
         df = _classificar_e_transformar(df, chave, dic_areas, dic_colab, dic_ind, config,
                                         avisos=avisos_transf)
         resultado["avisos"].extend(f"{tipo}: {av}" for av in avisos_transf)
+
+        if derivou_indicador:
+            pares_indicadores.extend(
+                zip(df["Código do Indicador *"].tolist(),
+                    df.get("Objetivo da Meta *", pd.Series([""] * len(df))).tolist())
+            )
 
         staging = base / STAGING_DIRS[chave]
         staging.mkdir(parents=True, exist_ok=True)
@@ -104,9 +116,54 @@ def executar(pasta_cliente: str) -> dict:
         contagens[tipo] = len(df)
         arquivos_gerados.append(str(caminho_out))
 
+    # Sem cadastro prévio de indicadores na plataforma (decisão de 2026-07-15): quando o
+    # indicador é derivado das metas e o cliente não tem fonte própria, o arquivo de
+    # importação de indicadores sai daqui, 1:1, para a FK metas→indicadores fechar.
+    if pares_indicadores and not mapeamento.get("indicadores", {}).get("arquivo_sugerido"):
+        df_ind = _gerar_indicadores_derivados(pares_indicadores)
+        staging_ind = base / "staging/03_indicadores"
+        staging_ind.mkdir(parents=True, exist_ok=True)
+        caminho_ind = staging_ind / "indicadores_transformados.csv"
+        df_ind.to_csv(str(caminho_ind), sep=";", index=False, encoding="utf-8-sig")
+        contagens["indicadores_derivados"] = len(df_ind)
+        arquivos_gerados.append(str(caminho_ind))
+        resultado["avisos"].append(
+            f"Indicadores gerados 1:1 a partir das metas ({len(df_ind)}): unidade/faixa/"
+            "frequência preenchidas com padrão e polaridade por heurística — revisar antes da importação."
+        )
+
     resultado["dados"]["contagens"] = contagens
     resultado["dados"]["arquivos_gerados"] = arquivos_gerados
     return resultado
+
+
+def _gerar_indicadores_derivados(pares: list) -> pd.DataFrame:
+    """Monta o staging de indicadores (1 por código) a partir de (código, objetivo) das metas."""
+    vistos = {}
+    for codigo, objetivo in pares:
+        if pd.isna(codigo) or str(codigo).strip() == "":
+            continue
+        codigo = str(codigo).strip()
+        if codigo not in vistos:
+            descricao = str(objetivo).strip() if pd.notna(objetivo) and str(objetivo).strip() else codigo
+            vistos[codigo] = descricao
+
+    linhas = []
+    for codigo, descricao in vistos.items():
+        polaridade_texto, _confianca = inferir_polaridade(descricao)
+        linha = {c: "" for c in CAMPOS_INDICADORES}
+        linha.update({
+            "Código do Indicador *": codigo,
+            "Descrição do Indicador *": descricao,
+            # Unidade inferida do texto; sem sinal, UM007 (Número) como neutro
+            "Código da Unidade de Medida *": inferir_unidade(descricao) or "UM007",
+            "Código da Faixa de Farol *": "FXF01",
+            "Código de Frequência de Acompanhamento *": "1",
+            "Polaridade *": "2" if polaridade_texto == "Menor é Melhor" else "1",
+            "Ativo *": "1",
+        })
+        linhas.append(linha)
+    return pd.DataFrame(linhas, columns=CAMPOS_INDICADORES)
 
 
 def _classificar_e_transformar(df: pd.DataFrame, tipo: str, dic_areas: dict,
@@ -119,13 +176,10 @@ def _classificar_e_transformar(df: pd.DataFrame, tipo: str, dic_areas: dict,
     if "Código da Meta *" in df.columns:
         if "Código do Indicador *" not in df.columns or df["Código do Indicador *"].isna().all():
             df["Código do Indicador *"] = df["Código da Meta *"].copy()
-            if not dic_ind:
-                avisos.append(
-                    "'Código do Indicador *' derivado do código da meta SEM dicionário de "
-                    "indicadores (config/dicionario_indicadores.csv) — os valores podem não "
-                    "corresponder aos códigos da plataforma (limite Texto(10)); a validação "
-                    "vai bloquear códigos suspeitos."
-                )
+            avisos.append(
+                "'Código do Indicador *' derivado 1:1 do código da meta "
+                "(sem fonte de indicadores na base do cliente)."
+            )
 
     # Códigos de meta do cliente passam adiante como estão — a plataforma não usa prefixo.
     # De-para manual opcional em config/dicionario_metas_<tipo>.csv (curva de alcance e
@@ -145,6 +199,18 @@ def _classificar_e_transformar(df: pd.DataFrame, tipo: str, dic_areas: dict,
     if dic_ind and "Código do Indicador *" in df.columns:
         res = aplicar_dicionario.aplicar(df, dic_ind, ["Código do Indicador *"], ausentes="manter")
         df = res["dados"]["dataframe"]
+
+    # Pilar estratégico: de-para manual opcional + código padrão de cadastro da plataforma
+    if tipo in ("individual", "projeto"):
+        col_pilar = "Código do Pilar Estratégico *"
+        dic_pilares = _carregar_dic(config / "dicionario_pilares.csv")
+        if dic_pilares and col_pilar in df.columns:
+            res = aplicar_dicionario.aplicar(df, dic_pilares, [col_pilar], ausentes="manter")
+            df = res["dados"]["dataframe"]
+            avisos.append("De-para manual de pilares aplicado (config/dicionario_pilares.csv).")
+        if col_pilar not in df.columns or df[col_pilar].isna().all():
+            df[col_pilar] = "DZ001"
+            avisos.append(f"'{col_pilar}' preenchido com padrão: DZ001 (código padrão de cadastro).")
 
     # Converter email → login nas colunas de responsável (padrão: user@dominio → user)
     for col_login in ["Login do Responsável pela Meta *", "Login do Data-Provider *"]:

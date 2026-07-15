@@ -10,6 +10,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from ferramentas.codificacao import construir_dicionario, aplicar_dicionario
+from ferramentas.inferencia.indicadores import inferir_unidade
 from ferramentas.transformacao import normalizar_dominio
 from ferramentas.transformacao.dominios_plataforma import (
     EQUIVALENCIAS_POLARIDADE, EQUIVALENCIAS_FREQUENCIA, EQUIVALENCIAS_UNIDADE_MEDIDA,
@@ -31,7 +32,7 @@ CAMPOS_OBRIGATORIOS = [
 STAGING_DIR = "staging/03_indicadores"
 
 
-def executar(pasta_cliente: str, unidade_padrao: str = "1",
+def executar(pasta_cliente: str, unidade_padrao: str = "UM007",
              faixa_padrao: str = "FXF01", frequencia_padrao: str = "1") -> dict:
     resultado = {"status": "ok", "agente": "indicadores", "dados": {}, "erros": [], "avisos": []}
 
@@ -90,6 +91,21 @@ def executar(pasta_cliente: str, unidade_padrao: str = "1",
                     f"'{coluna}': valor(es) não reconhecido(s) no domínio da plataforma: "
                     f"{res['dados']['nao_reconhecidos'][:5]}"
                 )
+
+    # Unidade de medida ausente: inferir do texto da descrição; sem sinal, cai no padrão
+    col_uni = "Código da Unidade de Medida *"
+    if "Descrição do Indicador *" in df.columns:
+        if col_uni not in df.columns:
+            df[col_uni] = None
+        mask = df[col_uni].isna() | (df[col_uni].astype(str).str.strip() == "")
+        if mask.any():
+            df.loc[mask, col_uni] = df.loc[mask, "Descrição do Indicador *"].apply(
+                lambda d: inferir_unidade(d) or unidade_padrao
+            )
+            resultado["avisos"].append(
+                f"'{col_uni}': {int(mask.sum())} linha(s) sem unidade — inferida do texto "
+                f"da descrição (sem sinal → {unidade_padrao}). Revisar antes da importação."
+            )
 
     # Defaults para campos obrigatórios
     defaults = {

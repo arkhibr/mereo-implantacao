@@ -112,6 +112,8 @@ Os agentes aplicam automaticamente os de-para que existirem em `config/`:
 | `dicionario_indicadores.csv` | Indicadores, Metas |
 | `dicionario_metas_<tipo>.csv` | Metas, Curva de Alcance, Valores |
 | `dicionario_colaboradores.csv` | Metas |
+| `dicionario_pilares.csv` | Metas (pilar estratégico; sem valor na fonte, o padrão é `DZ001` — código padrão de cadastro) |
+| `dicionario_grupos_permissao.csv` | Colaboradores (perfil descritivo → código do tenant; sem valor na fonte, o padrão é `GRP_4`) |
 
 > O de-para garante consistência referencial — o mesmo código de área usado em Colaboradores e em Metas deve ser exatamente o mesmo, por isso todos os agentes leem o mesmo arquivo.
 

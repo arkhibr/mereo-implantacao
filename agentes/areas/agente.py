@@ -15,7 +15,7 @@ from ferramentas.qualidade import erros_planilha
 
 CAMPOS_OBRIGATORIOS = ["Código da Área*", "Descrição da Área*", "Código da Filial*"]
 TODOS_CAMPOS = ["Código da Área*", "Descrição da Área*", "Código da Filial*",
-                "Código da Área Superior", "Status da Área"]
+                "Código da Área Superior", "Status da Área", "Login Responsável da Área"]
 STAGING_DIR = "staging/01_areas"
 
 
@@ -74,6 +74,31 @@ def executar(pasta_cliente: str, codigo_filial_padrao: str = "1") -> dict:
                 df, dic_areas, ["Código da Área*", "Código da Área Superior"], ausentes="manter")
             df = res_aplic["dados"]["dataframe"]
             resultado["avisos"].append("De-para manual de áreas aplicado (config/dicionario_areas.csv).")
+
+    # Login do responsável da área (não obrigatório): deriva de e-mail; NOME não vira
+    # login — fica vazio para revisão. "NULL" é literal da plataforma (remove o responsável).
+    col_resp = "Login Responsável da Área"
+    if col_resp in df.columns:
+        def _normalizar_login(v):
+            if pd.isna(v) or str(v).strip() == "":
+                return v
+            s = str(v).strip()
+            if s.upper() == "NULL":
+                return "NULL"
+            if "@" in s:
+                return s.split("@")[0].lower()
+            if " " in s or any(ord(c) > 127 for c in s):
+                return ""
+            return s.lower()
+
+        tinha_valor = df[col_resp].notna() & (df[col_resp].astype(str).str.strip() != "")
+        df[col_resp] = df[col_resp].apply(_normalizar_login)
+        esvaziados = int((tinha_valor & (df[col_resp].astype(str).str.strip() == "")).sum())
+        if esvaziados:
+            resultado["avisos"].append(
+                f"'{col_resp}': {esvaziados} valor(es) sem login derivável (nome no lugar de "
+                "login/e-mail) — deixados em branco (campo não obrigatório)."
+            )
 
     # Validar hierarquia
     if "Código da Área Superior" in df.columns:

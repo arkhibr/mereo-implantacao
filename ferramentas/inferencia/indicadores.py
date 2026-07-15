@@ -48,6 +48,35 @@ PALAVRAS_MAIOR = [
 ]
 
 
+# Unidade de medida — sinais de texto → código padrão da plataforma.
+# Ordem importa: percentual vence (meta "atingir 95% de R$ X" costuma medir o percentual).
+SINAIS_UNIDADE = [
+    (r"%|\bpercentual\b|\bporcentagem\b", "UM001"),
+    (r"(r\$|\breais\b|\breal\b).{0,30}?(\bmilh[õo]es\b|\bmm\b)|(\bmilh[õo]es\b|\bmm\b).{0,10}?(r\$|\breais\b)", "UM004"),
+    (r"(r\$|\breais\b).{0,30}?\bmil\b|\bmil\b.{0,10}?(r\$|\breais\b)", "UM003"),
+    (r"r\$|\breais\b", "UM002"),
+    (r"\bdias?\b", "UM005"),
+    (r"\bhoras?\b", "UM006"),
+    (r"\bm³\b|\bm3\b|metros? c[úu]bicos?", "UM008"),
+    (r"\bhectares?\b", "UM009"),
+    (r"\bscore\b", "UM012"),
+]
+
+
+def inferir_unidade(descricao: str) -> str:
+    """
+    Devolve o código da unidade de medida inferido do texto, ou None quando não
+    há sinal confiável (o chamador decide o fallback).
+    """
+    if not descricao:
+        return None
+    texto = str(descricao).lower()
+    for padrao, codigo in SINAIS_UNIDADE:
+        if re.search(padrao, texto):
+            return codigo
+    return None
+
+
 @dataclass
 class CandidatoIndicador:
     """Indicador único extraído das metas, com rastreabilidade."""

@@ -32,7 +32,7 @@ EQUIVALENCIAS_ATIVO = {
 STAGING_DIR = "staging/02_colaboradores"
 
 
-def executar(pasta_cliente: str, grupo_permissoes_padrao: str = "GRP_PADRAO",
+def executar(pasta_cliente: str, grupo_permissoes_padrao: str = "GRP_4",
              idioma_padrao: str = "1", workflow_padrao: str = "0") -> dict:
     resultado = {"status": "ok", "agente": "colaboradores", "dados": {}, "erros": [], "avisos": []}
 
@@ -90,6 +90,14 @@ def executar(pasta_cliente: str, grupo_permissoes_padrao: str = "GRP_PADRAO",
     if "Ativo*" in df.columns:
         res = normalizar_dominio.normalizar(df, "Ativo*", EQUIVALENCIAS_ATIVO, padrao="1")
         df = res["dados"]["dataframe"]
+
+    # Grupo de permissões: de-para manual opcional (perfil descritivo → código do tenant)
+    col_grupo = "Código do Grupo de Permissões*"
+    dic_grupos = _carregar_dicionario(config / "dicionario_grupos_permissao.csv")
+    if dic_grupos and col_grupo in df.columns:
+        res = aplicar_dicionario.aplicar(df, dic_grupos, [col_grupo], ausentes="manter")
+        df = res["dados"]["dataframe"]
+        resultado["avisos"].append("De-para manual de grupos de permissão aplicado (config/dicionario_grupos_permissao.csv).")
 
     # Preencher campos obrigatórios com defaults quando ausentes
     defaults = {
