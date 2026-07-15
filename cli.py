@@ -459,6 +459,155 @@ def _erro(msg: str):
     sys.exit(1)
 
 
+# Ajuda detalhada por comando: ./implantacao ajuda <comando>  ou  <comando> --help
+AJUDA_COMANDOS = {
+    "novo": {
+        "uso": "./implantacao novo <cliente>",
+        "descricao": "Cria clientes/<cliente>/ a partir do modelo, com as pastas raw/ "
+                     "(arquivos originais do cliente, somente leitura), config/, staging/, "
+                     "output/ e relatorios/.",
+        "produz": "Estrutura de pastas vazia do cliente.",
+        "exemplo": "./implantacao novo acme",
+        "apos": "Coloque os Excel/CSV enviados pelo cliente em clientes/<cliente>/raw/ "
+                "e rode 'analisar' (determinista) ou 'pilotar' (agente LLM decide).",
+    },
+    "analisar": {
+        "uso": "./implantacao analisar <cliente>",
+        "descricao": "Perfila todos os arquivos de raw/ (abas, colunas, tipos, qualidade) e "
+                     "gera o mapeamento automático campo a campo entre a base do cliente e "
+                     "os templates da plataforma.",
+        "produz": "config/diagnostico.json, config/diagnostico_resumo.md e config/mapeamento.json.",
+        "exemplo": "./implantacao analisar acme",
+        "apos": "Revise config/mapeamento.json, ajuste o que for preciso e adicione "
+                "\"travado\": true para impedir sobrescrita. Depois rode 'transformar'.",
+    },
+    "transformar": {
+        "uso": "./implantacao transformar <cliente>",
+        "descricao": "Roda as transformações (áreas, colaboradores, indicadores, metas, curva "
+                     "de alcance, valores) aplicando os de-para manuais de config/, e valida "
+                     "tudo contra os templates: schema, campos obrigatórios, códigos e limites "
+                     "da plataforma, integridade referencial e periodicidade.",
+        "produz": "staging/ (CSVs intermediários), relatorios/relatorio_validacao.md e, se "
+                  "aprovado, output/<data>/*.xlsx prontos para importar na plataforma.",
+        "exemplo": "./implantacao transformar acme",
+        "apos": "Se bloquear, abra relatorios/relatorio_validacao.md — para texto no lugar "
+                "de código, crie o de-para com './implantacao depara <cliente>'.",
+    },
+    "rodar": {
+        "uso": "./implantacao rodar <cliente>",
+        "descricao": "Pipeline completo de uma vez: 'analisar' seguido de 'transformar'. "
+                     "Use quando o mapeamento automático costuma acertar (ou já está travado).",
+        "produz": "Tudo que 'analisar' e 'transformar' produzem.",
+        "exemplo": "./implantacao rodar acme",
+        "apos": "Confira o status final e o relatório de validação.",
+    },
+    "depara": {
+        "uso": "./implantacao depara <cliente> [tipo]",
+        "descricao": "Gerencia os de-para manuais que traduzem o que veio na base do cliente "
+                     "para o código da plataforma (formato id_origem;id_destino, um por linha). "
+                     "Sem [tipo], lista os suportados e o status de cada um. Com [tipo], cria o "
+                     "CSV com o nome e cabeçalho corretos.\n"
+                     "  Tipos: pilares, grupos, indicadores, areas, colaboradores, "
+                     "metas-individual, metas-compartilhada, metas-projeto.",
+        "produz": "clientes/<cliente>/config/dicionario_<tipo>.csv — aplicado automaticamente "
+                  "na próxima transformação.",
+        "exemplo": "./implantacao depara acme pilares",
+        "apos": "Preencha o CSV (ex.: Metas Setoriais;DZ001) e rode 'transformar' de novo.",
+    },
+    "grupos": {
+        "uso": "./implantacao grupos",
+        "descricao": "Lista os módulos de carga (núcleo, indicadores, metas, competências), "
+                     "suas etapas e dependências. O núcleo (áreas + colaboradores) é a base; "
+                     "os demais módulos acrescentam significado sobre ela.",
+        "produz": "Apenas listagem em tela.",
+        "exemplo": "./implantacao grupos",
+        "apos": "Rode um módulo específico com './implantacao grupo <grupo> <cliente>'.",
+    },
+    "grupo": {
+        "uso": "./implantacao grupo <grupo> <cliente>",
+        "descricao": "Roda apenas as etapas de um módulo de carga (nucleo, indicadores, metas "
+                     "ou competencias). Útil para reprocessar um módulo sem tocar nos outros. "
+                     "A ferramenta avisa se o núcleo ainda não estiver pronto, mas não bloqueia "
+                     "— a decisão é do consultor.",
+        "produz": "Staging e validação das etapas do módulo escolhido.",
+        "exemplo": "./implantacao grupo metas acme",
+        "apos": "Valide o resultado com 'transformar' ou 'validar'.",
+    },
+    "diagnosticar": {
+        "uso": "./implantacao diagnosticar <cliente>",
+        "descricao": "Versão com agente LLM do diagnóstico: percorre raw/, perfila os arquivos "
+                     "e escreve o resultado com análise narrativa. Requer MEREO_LLM_API_KEY "
+                     "no .env.",
+        "produz": "config/diagnostico.json e resumo legível.",
+        "exemplo": "./implantacao diagnosticar acme",
+        "apos": "Siga para 'mapear'.",
+    },
+    "mapear": {
+        "uso": "./implantacao mapear <cliente>",
+        "descricao": "Versão com agente LLM do mapeamento: sugere a correspondência campo a "
+                     "campo com nível de confiança e pergunta ao consultor quando está em "
+                     "dúvida (pausa HITL). Requer MEREO_LLM_API_KEY no .env.",
+        "produz": "config/mapeamento.json.",
+        "exemplo": "./implantacao mapear acme",
+        "apos": "Se pausar com pergunta, responda com './implantacao responder <cliente> <sessao>'.",
+    },
+    "inferir": {
+        "uso": "./implantacao inferir <cliente>",
+        "descricao": "Agente LLM que fabrica entidades que o cliente não enviou, a partir do "
+                     "que enviou (hoje: indicadores a partir das metas), com nível de confiança "
+                     "por campo. Nada entra no pipeline sem o consultor apontar a fonte no "
+                     "mapeamento.",
+        "produz": "inferencia/Indicadores_inferidos.csv e relatorios/relatorio_inferencia.md.",
+        "exemplo": "./implantacao inferir acme",
+        "apos": "Revise o CSV e, se aprovar, aponte-o como fonte no mapeamento.",
+    },
+    "validar": {
+        "uso": "./implantacao validar <cliente>",
+        "descricao": "Versão com agente LLM da validação final: mesmos checks do determinista "
+                     "+ análise narrativa dos achados. Três estados: aprovado, aprovado com "
+                     "ressalvas (pede confirmação humana) e bloqueado.",
+        "produz": "relatorios/relatorio_validacao.md e, se aprovado, output/<data>/*.xlsx.",
+        "exemplo": "./implantacao validar acme",
+        "apos": "Importe as planilhas de output/<data>/ na plataforma.",
+    },
+    "pilotar": {
+        "uso": "./implantacao pilotar <cliente>",
+        "descricao": "Agente LLM orquestrador: olha o estado do cliente (o que já existe em "
+                     "config/, staging/, output/) e decide sozinho o próximo passo, executando "
+                     "as etapas na ordem certa e pausando para perguntas quando necessário.",
+        "produz": "O que cada etapa executada produz + relatorios/log_pipeline.json.",
+        "exemplo": "./implantacao pilotar acme",
+        "apos": "Acompanhe as pausas HITL com 'responder'.",
+    },
+    "responder": {
+        "uso": "./implantacao responder <cliente> <sessao_id>",
+        "descricao": "Retoma um agente LLM pausado aguardando resposta humana. Mostra a "
+                     "pergunta, o contexto e as opções; a resposta é digitada no terminal "
+                     "(Enter duplo para enviar).",
+        "produz": "Continuação da sessão de onde parou.",
+        "exemplo": "./implantacao responder acme 20260715_142037_a3f1c2",
+        "apos": "O id da sessão aparece na mensagem de pausa do agente.",
+    },
+    "demo": {
+        "uso": "./implantacao demo <cliente>",
+        "descricao": "Smoke test da infraestrutura LLM: roda o agente de exemplo com uma "
+                     "chamada mínima ao gateway. Use após a instalação para confirmar que "
+                     "rede, proxy e chave estão OK antes de usar dados reais.",
+        "produz": "Uma sessão de teste em sessoes/.",
+        "exemplo": "./implantacao novo teste && ./implantacao demo teste",
+        "apos": "Se funcionar, pode remover o cliente de teste: rm -rf clientes/teste",
+    },
+    "ajuda": {
+        "uso": "./implantacao ajuda [comando]",
+        "descricao": "Sem argumento, mostra a visão geral (comandos por categoria + fluxo "
+                     "típico). Com um comando, mostra esta ajuda detalhada. '<comando> --help' "
+                     "funciona igual.",
+        "produz": "Apenas texto em tela.",
+        "exemplo": "./implantacao ajuda depara",
+        "apos": "",
+    },
+}
+
 _CATEGORIAS_AJUDA = [
     ("SETUP", [
         ("novo",         "<cliente>",          "Cria estrutura de pastas para um novo cliente"),
@@ -487,7 +636,7 @@ _CATEGORIAS_AJUDA = [
     ]),
     ("OUTROS", [
         ("demo",         "<cliente>",          "Smoke test do agente exemplo (valida LLM)"),
-        ("ajuda",        "",                   "Mostra esta tela"),
+        ("ajuda",        "[comando]",          "Visão geral, ou detalhes de um comando"),
     ]),
 ]
 
@@ -515,6 +664,7 @@ def _welcome():
     print(f"{v.titulo('USO BÁSICO')}")
     print(f"  ./implantacao {v.comando('<comando>')} {v.comando('<cliente>')}")
     print()
+    _imprimir_fluxo_tipico()
     _imprimir_lista_comandos()
     print(v.titulo("EXEMPLOS"))
     print(f"  ./implantacao {v.comando('novo acme')}")
@@ -526,6 +676,44 @@ def _welcome():
     print()
 
 
+def _imprimir_fluxo_tipico():
+    v = _visual()
+    print(v.titulo("FLUXO TÍPICO"))
+    passos = [
+        ("1.", "novo acme",         "cria a estrutura; deposite os arquivos em clientes/acme/raw/"),
+        ("2.", "analisar acme",     "diagnóstico + mapeamento automático (revise config/mapeamento.json)"),
+        ("3.", "transformar acme",  "transforma, valida e gera output/<data>/*.xlsx"),
+        ("4.", "depara acme <tipo>","se a validação bloquear código, crie o de-para e repita o passo 3"),
+    ]
+    for num, cmd_ex, desc in passos:
+        print(f"  {num} {v.comando(f'./implantacao {cmd_ex:<18}')} {v.fraco(desc)}")
+    print(v.fraco("  Alternativa com IA: ./implantacao pilotar acme — o agente decide e executa os passos."))
+    print()
+
+
+def _ajuda_comando(cmd: str):
+    v = _visual()
+    info = AJUDA_COMANDOS.get(cmd)
+    if info is None:
+        _ajuda_compacta()
+        return
+    print()
+    print(f"  {v.titulo(cmd)} — {SUBCOMANDOS.get(cmd, ('', 'ajuda do CLI'))[1]}")
+    print()
+    print(f"  {v.titulo('Uso:')}      {v.comando(info['uso'])}")
+    print()
+    for linha in info["descricao"].splitlines():
+        print(f"  {linha}")
+    print()
+    print(f"  {v.titulo('Produz:')}   {info['produz']}")
+    print(f"  {v.titulo('Exemplo:')}  {v.comando(info['exemplo'])}")
+    if info["apos"]:
+        print(f"  {v.titulo('Depois:')}   {v.fraco(info['apos'])}")
+    print()
+    print(v.fraco("  Visão geral de todos os comandos:  ./implantacao ajuda"))
+    print()
+
+
 def _ajuda_compacta():
     v = _visual()
     from nucleo import __version__
@@ -534,7 +722,9 @@ def _ajuda_compacta():
     print()
     print(f"  {v.titulo('Uso:')}  ./implantacao {v.comando('<comando>')} {v.comando('<cliente>')} [args]")
     print()
+    _imprimir_fluxo_tipico()
     _imprimir_lista_comandos()
+    print(v.fraco("  Detalhes de um comando:  ./implantacao ajuda <comando>   (ou  <comando> --help)"))
     print(v.fraco("  Para a tela completa (banner + descrição), rode  ./implantacao  sem argumentos."))
     print()
 
@@ -544,10 +734,18 @@ def main():
         _welcome()
         sys.exit(0)
     if sys.argv[1] in ("-h", "--help", "ajuda"):
-        _ajuda_compacta()
+        if len(sys.argv) > 2 and sys.argv[2] in AJUDA_COMANDOS:
+            _ajuda_comando(sys.argv[2])
+        else:
+            _ajuda_compacta()
         sys.exit(0)
 
     cmd = sys.argv[1]
+
+    # <comando> --help / -h / ajuda → ajuda detalhada do comando
+    if cmd in SUBCOMANDOS and len(sys.argv) > 2 and sys.argv[2] in ("-h", "--help", "ajuda"):
+        _ajuda_comando(cmd)
+        sys.exit(0)
 
     if cmd not in SUBCOMANDOS:
         v = _visual()
