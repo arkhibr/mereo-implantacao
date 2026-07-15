@@ -117,6 +117,13 @@ Os agentes aplicam automaticamente os de-para que existirem em `config/`:
 
 > O de-para garante consistência referencial — o mesmo código de área usado em Colaboradores e em Metas deve ser exatamente o mesmo, por isso todos os agentes leem o mesmo arquivo.
 
+Para não errar o nome do arquivo nem o cabeçalho, use o CLI:
+
+```bash
+./implantacao depara <cliente>            # lista os de-para e o status de cada um
+./implantacao depara <cliente> pilares    # cria o CSV correto e mostra como preencher
+```
+
 ---
 
 ### Passo 3 — Executar a transformação por entidade

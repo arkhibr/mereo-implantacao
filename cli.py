@@ -16,6 +16,7 @@ Uso:
   ./implantacao inferir     <cliente>                   (agente LLM de inferência — fabrica entidades faltantes)
   ./implantacao pilotar     <cliente>                   (agente LLM orquestrador — decide próximo passo)
   ./implantacao responder   <cliente> <sessao_id>       (retoma agente em HITL)
+  ./implantacao depara      <cliente> [tipo]            (lista ou cria de-para manuais de códigos)
 """
 import argparse
 import importlib
@@ -91,6 +92,36 @@ SUBCOMANDOS = {
     "inferir":      ("agente_llm",   "Roda o agente LLM de inferência (fabrica entidades canônicas que o cliente não enviou)"),
     "pilotar":      ("agente_llm",   "Roda o agente LLM orquestrador (decide o próximo passo a partir do estado)"),
     "responder":    ("retomar_hitl", "Retoma agente LLM pausado aguardando resposta humana"),
+    "depara":       ("depara",       "Lista ou cria de-para manuais (texto do cliente → código da plataforma)"),
+}
+
+# De-para manuais suportados: tipo → (arquivo em config/, onde é aplicado, exemplo de linha).
+# Os agentes aplicam automaticamente quando o arquivo existe; formato id_origem;id_destino.
+DE_PARA = {
+    "pilares":             ("dicionario_pilares.csv",
+                            "Metas — Código do Pilar Estratégico (padrão sem de-para: DZ001)",
+                            "Metas Setoriais;DZ001"),
+    "grupos":              ("dicionario_grupos_permissao.csv",
+                            "Colaboradores — Código do Grupo de Permissões (padrão: GRP_4)",
+                            "Administrador Global;GRP_4"),
+    "indicadores":         ("dicionario_indicadores.csv",
+                            "Indicadores e Metas — Código do Indicador",
+                            "SLA de Atendimento;IND_0042"),
+    "areas":               ("dicionario_areas.csv",
+                            "Áreas (código e área superior), Colaboradores e Metas",
+                            "Diretoria Comercial;1.2"),
+    "colaboradores":       ("dicionario_colaboradores.csv",
+                            "Metas — logins de responsável/data-provider",
+                            "Maria Silva Santos;maria.santos"),
+    "metas-individual":    ("dicionario_metas_individual.csv",
+                            "Metas individuais, Curva de Alcance e Valores",
+                            "FIN01;MT_0001"),
+    "metas-compartilhada": ("dicionario_metas_compartilhada.csv",
+                            "Metas compartilhadas, Curva de Alcance e Valores",
+                            "FIN01;MT_0001"),
+    "metas-projeto":       ("dicionario_metas_projeto.csv",
+                            "Metas de projeto, Curva de Alcance e Valores",
+                            "PRJ01;MT_0100"),
 }
 
 AGENTES_LLM = {
@@ -309,6 +340,58 @@ def retomar_hitl(pasta: Path, sessao_id: str):
     sys.exit(0 if resultado.status in ("concluida", "pausada_hitl") else 1)
 
 
+def gerenciar_depara(pasta: Path, tipo: str = None):
+    v = _visual()
+    config = pasta / "config"
+
+    if tipo is None:
+        print()
+        print(v.titulo("DE-PARA MANUAIS DE CÓDIGOS"))
+        print(v.fraco("  Traduzem o que veio na base do cliente para o código da plataforma."))
+        print(v.fraco("  Formato: id_origem;id_destino — aplicados automaticamente quando o arquivo existe."))
+        print()
+        for nome, (arquivo, aplicado_em, _ex) in DE_PARA.items():
+            caminho = config / arquivo
+            if caminho.exists():
+                n = max(0, sum(1 for _ in caminho.open(encoding="utf-8")) - 1)
+                status = v.success(f"{n} entrada(s)")
+            else:
+                status = v.fraco("— não criado")
+            print(f"  {v.comando(f'{nome:<20}')} {status}")
+            print(f"      {v.fraco(arquivo + '  ·  aplica em: ' + aplicado_em)}")
+        print()
+        print(v.fraco("  Criar um de-para:  ") + v.comando(f"./implantacao depara {pasta.name} <tipo>"))
+        print()
+        return
+
+    if tipo not in DE_PARA:
+        _erro(
+            f"Tipo de de-para desconhecido: {tipo!r}.\n"
+            f"  Válidos: {', '.join(DE_PARA)}\n"
+            f"  Para listar:  ./implantacao depara {pasta.name}"
+        )
+
+    arquivo, aplicado_em, exemplo = DE_PARA[tipo]
+    caminho = config / arquivo
+    print()
+    if caminho.exists():
+        n = max(0, sum(1 for _ in caminho.open(encoding="utf-8")) - 1)
+        print(f"  {v.info(f'Já existe com {n} entrada(s):')} {v.caminho(f'clientes/{pasta.name}/config/{arquivo}')}")
+    else:
+        config.mkdir(exist_ok=True)
+        caminho.write_text("id_origem;id_destino\n", encoding="utf-8")
+        print(f"  {v.success('Criado:')} {v.caminho(f'clientes/{pasta.name}/config/{arquivo}')}")
+    print()
+    print(f"  {v.titulo('Como preencher')} {v.fraco('(uma linha por tradução, separada por ;)')}")
+    print(f"    id_origem;id_destino")
+    print(f"    {v.comando(exemplo)}")
+    print()
+    print(f"  {v.fraco('Aplicado em: ' + aplicado_em)}")
+    print(f"  {v.fraco('O pipeline aplica automaticamente na próxima execução de')} "
+          f"{v.comando(f'./implantacao transformar {pasta.name}')}")
+    print()
+
+
 def _imprimir_resultado_llm(pasta: Path, resultado):
     v = _visual()
     marca = {
@@ -384,6 +467,9 @@ _CATEGORIAS_AJUDA = [
         ("analisar",     "<cliente>",          "Diagnóstico + mapeamento automático"),
         ("transformar",  "<cliente>",          "Roda transformações + validação"),
         ("rodar",        "<cliente>",          "Pipeline completo (analisar + transformar)"),
+    ]),
+    ("CORREÇÕES DE CÓDIGO", [
+        ("depara",       "<cliente> [tipo]",   "Lista ou cria de-para manuais (texto → código da plataforma)"),
     ]),
     ("CARGAS POR MÓDULO", [
         ("grupos",       "",                   "Lista os módulos e suas dependências"),
@@ -514,6 +600,10 @@ def main():
         if len(sys.argv) < 4:
             _erro("Informe o id da sessão.  Ex: ./implantacao responder cliente <sessao_id>")
         retomar_hitl(pasta, sys.argv[3])
+        return
+
+    if acao == "depara":
+        gerenciar_depara(pasta, sys.argv[3] if len(sys.argv) > 3 else None)
         return
 
     rodar_etapa(pasta, acao)

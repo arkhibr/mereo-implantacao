@@ -184,7 +184,13 @@ def executar(pasta_cliente: str, pasta_templates: str = None) -> dict:
     else:
         resultado["status"] = "erro"
         nomes = [r["entidade"] for r in bloqueados]
-        resultado["erros"].append(f"{len(bloqueados)} entidade(s) bloqueada(s): {nomes}. Corrigir antes de gerar output.")
+        resultado["erros"].append(
+            f"{len(bloqueados)} entidade(s) bloqueada(s): {nomes}. Corrigir antes de gerar output."
+        )
+        resultado["erros"].append(
+            f"Detalhes dos achados: relatorios/relatorio_validacao.md — se o problema for "
+            f"texto no lugar de código, crie um de-para: ./implantacao depara {base.name}"
+        )
 
     return resultado
 

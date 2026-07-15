@@ -41,6 +41,29 @@ git pull && ./implantacao grupos
 ```
 
 > [!NOTE]
+> **v0.3.0 — padrões da plataforma + output em Excel.** Nenhuma dependência
+> nova — o `git pull` acima já habilita tudo. O que muda:
+>
+> - **Output final em `.xlsx`** (formato que a plataforma importa), em vez de CSV.
+> - **Códigos saem como estão na base do cliente** — sem os prefixos `AREA_`/`METI_`/`IND_`.
+> - **Campos codificados traduzidos e validados**: polaridade, agregação, definição
+>   do valor, frequência e unidades de medida usam as tabelas oficiais da
+>   plataforma; texto onde se espera código é bloqueado antes do output.
+> - **Indicadores gerados junto com as metas** quando o cliente não tem fonte
+>   própria; periodicidade (mensal × anual) detectada pela estrutura dos valores.
+> - De-para manuais opcionais em `config/` (pilares, grupos de permissão,
+>   indicadores, áreas, metas) — ver `sops/03_transformacao/sop_transformacao.md`.
+
+> [!IMPORTANT]
+> **Se você já processou algum cliente em versão anterior**, remova os dicionários
+> gerados automaticamente antes de reprocessar — a partir da v0.3.0 eles são
+> interpretados como de-para manual e reintroduziriam os prefixos antigos:
+>
+> ```bash
+> rm clientes/<cliente>/config/dicionario_{areas,metas_*,indicadores}.csv
+> ```
+
+> [!NOTE]
 > **v0.2.0 — módulo de Competências.** Esta atualização adiciona o módulo de
 > competências (catálogo + formulários de avaliação), listado em
 > `./implantacao grupos`. Nenhuma dependência nova é necessária — o `git pull`
@@ -363,7 +386,7 @@ Agente LLM valida cada arquivo de staging contra o template (schema, campos obri
 - **`aprovado_com_ressalvas`** — copia após confirmação humana via HITL.
 - **`bloqueado`** — não copia; relatório explica os achados críticos.
 
-Produz `clientes/acme/relatorios/relatorio_validacao.md` (com seção narrativa) e, quando aprovado, `clientes/acme/output/<data>/Import_*.csv`.
+Produz `clientes/acme/relatorios/relatorio_validacao.md` (com seção narrativa) e, quando aprovado, `clientes/acme/output/<data>/Import_*.xlsx` — planilhas Excel no formato que a plataforma importa.
 
 ### 6. Importar na plataforma Mereo
 
@@ -432,10 +455,10 @@ clientes/acme/
 │   ├── 05_metas_compartilhadas/
 │   ├── 06_metas_projeto/
 │   └── 07_curva_alcance/
-├── output/          ← arquivos prontos pra importação
-│   └── 2026-04-28/
-│       ├── Import_Áreas (Estrutura Hierárquica).csv
-│       ├── Import_Colaboradores.csv
+├── output/          ← planilhas .xlsx prontas pra importação
+│   └── 2026-07-15/
+│       ├── Import_Áreas (Estrutura Hierárquica).xlsx
+│       ├── Import_Colaboradores.xlsx
 │       └── ...
 ├── relatorios/      ← relatorio_validacao.md, log_pipeline.json
 └── sessoes/         ← histórico de sessões dos agentes LLM
@@ -478,7 +501,7 @@ O agente determinístico de áreas/diagnostico/mapeamento falhou. Veja a mensage
 Verifique `clientes/<cliente>/sessoes/<id>/metadata.json` — se status for `ativa`, o processo provavelmente foi interrompido. Sessões `pausada_hitl` esperam `responder`. Sessões `erro` podem ser inspecionadas no `transcript.jsonl`.
 
 **Arquivos com encoding estranho na saída**
-Os templates da plataforma usam `latin-1`. Os CSVs de output são gerados em UTF-8 com BOM por padrão — o Excel abre corretamente.
+Os templates da plataforma usam `latin-1`. Os CSVs intermediários de `staging/` são gerados em UTF-8 com BOM; o output final é `.xlsx`, sem questão de encoding.
 
 ---
 
