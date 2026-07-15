@@ -325,7 +325,10 @@ Todos os comandos seguem `<wrapper> <comando> <cliente>`:
 - **Linux/macOS:** `./implantacao <comando> <cliente>`
 - **Windows:** `implantacao.bat <comando> <cliente>` (ou `.\implantacao.bat` no PowerShell)
 
-Os exemplos abaixo usam a forma Linux. No Windows, troque `./implantacao` por `implantacao.bat`. Use o wrapper sem argumentos para ver a ajuda.
+Os exemplos abaixo usam a forma Linux. No Windows, troque `./implantacao` por `implantacao.bat`. Use o wrapper sem argumentos para ver a ajuda — `./implantacao ajuda <comando>` (ou `<comando> --help`) detalha qualquer comando.
+
+> [!TIP]
+> Existem duas rotas equivalentes: a **determinista** (`analisar` + `transformar` — mais rápida, sem custo de LLM) e a **assistida por agentes** (`diagnosticar`, `mapear`, `validar`, `pilotar` — com análise narrativa e perguntas ao consultor). O passo a passo abaixo mostra a rota assistida; para a determinista, troque os passos 2–3 por `./implantacao analisar acme`.
 
 ### 1. Criar a estrutura para um cliente novo
 
@@ -374,6 +377,27 @@ Modo dirigido por LLM (decide o que falta, age e/ou recomenda próximos passos):
 
 O `pilotar` é o orquestrador LLM. Ele inspeciona o estado em disco, executa as transformações pendentes e — se ainda faltar diagnóstico, mapeamento ou validação — recomenda os comandos correspondentes.
 
+#### Se a validação bloquear: o ciclo de correção com de-para
+
+A validação impede que saia qualquer coisa que a plataforma rejeitaria — o caso mais comum é **texto onde a plataforma espera código** (ex.: "Metas Setoriais" no campo do pilar estratégico, "Administrador Global" no grupo de permissões). O ciclo de correção:
+
+```bash
+# 1. veja o que bloqueou
+cat clientes/acme/relatorios/relatorio_validacao.md
+
+# 2. crie o de-para do tipo apontado (nome e cabeçalho corretos, sem decorar nada)
+./implantacao depara acme pilares
+
+# 3. preencha o CSV (uma linha por tradução), ex.:
+#    id_origem;id_destino
+#    Metas Setoriais;DZ001
+
+# 4. rode de novo
+./implantacao transformar acme
+```
+
+`./implantacao depara acme` (sem tipo) lista todos os de-para suportados e o status de cada um. Repita o ciclo até o status `aprovado`.
+
 ### 5. Validação final
 
 ```bash
@@ -384,13 +408,17 @@ Agente LLM valida cada arquivo de staging contra o template (schema, campos obri
 
 - **`aprovado`** — copia para `output/<data>/` direto.
 - **`aprovado_com_ressalvas`** — copia após confirmação humana via HITL.
-- **`bloqueado`** — não copia; relatório explica os achados críticos.
+- **`bloqueado`** — não copia; relatório explica os achados críticos. Se o motivo for texto em campo de código, use o [ciclo de correção com de-para](#se-a-validação-bloquear-o-ciclo-de-correção-com-de-para).
 
 Produz `clientes/acme/relatorios/relatorio_validacao.md` (com seção narrativa) e, quando aprovado, `clientes/acme/output/<data>/Import_*.xlsx` — planilhas Excel no formato que a plataforma importa.
 
 ### 6. Importar na plataforma Mereo
 
-Os arquivos em `output/<data>/` seguem o nome dos templates da plataforma e podem ser importados diretamente.
+Os arquivos em `output/<data>/` seguem o nome dos templates da plataforma e podem ser importados diretamente. **Respeite a ordem de dependência** — cada import referencia códigos do anterior:
+
+1. **Áreas** → 2. **Colaboradores** (referenciam áreas) → 3. **Indicadores** → 4. **Metas** (referenciam áreas, colaboradores e indicadores) → 5. **Curva de Alcance e Valores** (referenciam metas).
+
+É a mesma ordem que `./implantacao grupos` mostra: o núcleo primeiro, depois os módulos que dependem dele.
 
 ---
 
@@ -478,8 +506,13 @@ clientes/acme/
 | `validar <cliente>` | Agente LLM de validação final | LLM |
 | `pilotar <cliente>` | Orquestrador LLM (decide o próximo passo) | LLM |
 | `rodar <cliente>` | Pipeline completo determinístico | det |
+| `depara <cliente> [tipo]` | Lista ou cria de-para manuais (texto → código da plataforma) | det |
+| `grupos` | Lista os módulos de carga e suas dependências | det |
+| `grupo <grupo> <cliente>` | Roda um módulo específico (nucleo, indicadores, metas, competencias) | det |
+| `inferir <cliente>` | Agente LLM de inferência (fabrica entidades que o cliente não enviou) | LLM |
 | `responder <cliente> <sessao_id>` | Retoma agente pausado em HITL | — |
 | `demo <cliente>` | Smoke test do agente exemplo | LLM |
+| `ajuda [comando]` | Visão geral, ou detalhes de um comando (`<comando> --help` funciona igual) | det |
 
 ---
 
@@ -496,6 +529,9 @@ Comportamento esperado quando você rerodar `mapear` ou `analisar` em cima de um
 
 **`Pipeline interrompido em 'X' (agente bloqueador)`**
 O agente determinístico de áreas/diagnostico/mapeamento falhou. Veja a mensagem de erro acima para a causa. Áreas é dependência das demais, então não dá pra continuar sem.
+
+**Validação bloqueada por "texto em campo de código" / "código fora do domínio"**
+A base do cliente trouxe descrição onde a plataforma espera código (pilar, grupo de permissões, agregação…). Abra `clientes/<cliente>/relatorios/relatorio_validacao.md` para ver os valores, crie o de-para com `./implantacao depara <cliente> <tipo>` e rode `transformar` de novo.
 
 **Sessão LLM travou ou não retorna**
 Verifique `clientes/<cliente>/sessoes/<id>/metadata.json` — se status for `ativa`, o processo provavelmente foi interrompido. Sessões `pausada_hitl` esperam `responder`. Sessões `erro` podem ser inspecionadas no `transcript.jsonl`.
