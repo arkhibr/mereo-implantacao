@@ -30,7 +30,6 @@ EQUIVALENCIAS_ATIVO = {
     "0": ["0", "nao", "não", "n", "inativo", "false", "no", "i"],
 }
 STAGING_DIR = "staging/02_colaboradores"
-PREFIXO_AREA = "AREA_"
 
 
 def executar(pasta_cliente: str, grupo_permissoes_padrao: str = "GRP_PADRAO",

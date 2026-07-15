@@ -10,7 +10,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from ferramentas.codificacao import construir_dicionario, aplicar_dicionario
+from ferramentas.codificacao import aplicar_dicionario
 from ferramentas.transformacao import normalizar_dominio, agregar_pipe
 from ferramentas.transformacao.dominios_plataforma import (
     EQUIVALENCIAS_AGREGACAO, EQUIVALENCIAS_DEFINICAO_VALOR,
@@ -35,7 +35,6 @@ CAMPOS_PROJETO = [
     "Códigos das Metas Superiores", "Objetivo da Meta *", "Peso da Meta *",
     "Fonte de Dados", "Memória de Cálculo", "Rótulos", "Meta Auditável",
 ]
-PREFIXO_META = {"individual": "METI_", "compartilhada": "METC_", "projeto": "METP_"}
 STAGING_DIRS = {
     "individual":    "staging/04_metas_individuais",
     "compartilhada": "staging/05_metas_compartilhadas",
@@ -115,7 +114,6 @@ def _classificar_e_transformar(df: pd.DataFrame, tipo: str, dic_areas: dict,
                                 avisos: list = None) -> pd.DataFrame:
     if avisos is None:
         avisos = []
-    prefixo = PREFIXO_META.get(tipo, "META_")
 
     # Derivar Código do Indicador * do Código da Meta * se não mapeado na fonte
     if "Código da Meta *" in df.columns:
@@ -129,16 +127,16 @@ def _classificar_e_transformar(df: pd.DataFrame, tipo: str, dic_areas: dict,
                     "vai bloquear códigos suspeitos."
                 )
 
-    if "Código da Meta *" in df.columns:
-        ids = df["Código da Meta *"].dropna().astype(str).unique().tolist()
-        res_dic = construir_dicionario.construir(ids, prefixo)
-        dic_meta = {e["id_origem"]: e["id_destino"] for e in res_dic["dados"]["dicionario"]}
-        construir_dicionario.salvar(res_dic["dados"]["dicionario"],
-                                    str(config / f"dicionario_metas_{tipo}.csv"))
+    # Códigos de meta do cliente passam adiante como estão — a plataforma não usa prefixo.
+    # De-para manual opcional em config/dicionario_metas_<tipo>.csv (curva de alcance e
+    # valores consolidam os mesmos arquivos para manter a referência consistente).
+    dic_meta = _carregar_dic(config / f"dicionario_metas_{tipo}.csv")
+    if dic_meta and "Código da Meta *" in df.columns:
         colunas_meta = [c for c in ["Código da Meta *", "Código da meta a ser compartilhada *",
                                      "Códigos da Metas Superiores"] if c in df.columns]
         res = aplicar_dicionario.aplicar(df, dic_meta, colunas_meta, ausentes="manter")
         df = res["dados"]["dataframe"]
+        avisos.append(f"De-para manual de metas aplicado (config/dicionario_metas_{tipo}.csv).")
 
     if dic_areas and "Código da Área *" in df.columns:
         res = aplicar_dicionario.aplicar(df, dic_areas, ["Código da Área *"], ausentes="manter")

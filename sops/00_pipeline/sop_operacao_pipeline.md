@@ -311,8 +311,8 @@ O relatório detalhado de validação está em `clientes/<nome_cliente>/relatori
 | Diagnóstico estrutural | `clientes/<cliente>/config/diagnostico.json` |
 | Resumo do diagnóstico | `clientes/<cliente>/config/diagnostico_resumo.md` |
 | Mapeamento de campos | `clientes/<cliente>/config/mapeamento.json` |
-| Dicionário de recodificação de áreas | `clientes/<cliente>/config/dicionario_areas.csv` |
-| Dicionário de recodificação de metas | `clientes/<cliente>/config/dicionario_metas_<tipo>.csv` |
+| De-para manual de áreas (opcional) | `clientes/<cliente>/config/dicionario_areas.csv` |
+| De-para manual de metas (opcional) | `clientes/<cliente>/config/dicionario_metas_<tipo>.csv` |
 | Arquivos transformados | `clientes/<cliente>/staging/` |
 | Output para importação | `clientes/<cliente>/output/<data>/` |
 | Relatório de validação | `clientes/<cliente>/relatorios/relatorio_validacao.md` |

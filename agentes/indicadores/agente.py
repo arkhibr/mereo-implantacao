@@ -28,7 +28,6 @@ CAMPOS_OBRIGATORIOS = [
     "Código do Indicador *", "Descrição do Indicador *", "Código da Unidade de Medida *",
     "Código da Faixa de Farol *", "Código de Frequência de Acompanhamento *", "Polaridade *", "Ativo *",
 ]
-PREFIXO_INDICADOR = "IND_"
 STAGING_DIR = "staging/03_indicadores"
 
 
@@ -64,14 +63,17 @@ def executar(pasta_cliente: str, unidade_padrao: str = "1",
 
     df = _aplicar_mapeamento(df_raw, conf.get("campos", []))
 
-    # Recodificar indicadores
-    if "Código do Indicador *" in df.columns:
-        ids = df["Código do Indicador *"].dropna().astype(str).unique().tolist()
-        res_dic = construir_dicionario.construir(ids, PREFIXO_INDICADOR)
-        dic = {e["id_origem"]: e["id_destino"] for e in res_dic["dados"]["dicionario"]}
-        res_aplic = aplicar_dicionario.aplicar(df, dic, ["Código do Indicador *"])
-        df = res_aplic["dados"]["dataframe"]
-        construir_dicionario.salvar(res_dic["dados"]["dicionario"], str(config / "dicionario_indicadores.csv"))
+    # Códigos de indicador do cliente passam adiante como estão — a plataforma não usa
+    # prefixo. De-para manual opcional em config/dicionario_indicadores.csv (ex.: indicadores
+    # já cadastrados no tenant); o agente de metas aplica o mesmo arquivo.
+    caminho_dic = config / "dicionario_indicadores.csv"
+    if caminho_dic.exists() and "Código do Indicador *" in df.columns:
+        res_carga = construir_dicionario.carregar(str(caminho_dic))
+        dic = res_carga["dados"].get("mapa", {})
+        if dic:
+            res_aplic = aplicar_dicionario.aplicar(df, dic, ["Código do Indicador *"], ausentes="manter")
+            df = res_aplic["dados"]["dataframe"]
+            resultado["avisos"].append("De-para manual de indicadores aplicado (config/dicionario_indicadores.csv).")
 
     # Normalizar domínios da plataforma (texto → código oficial)
     normalizacoes = [

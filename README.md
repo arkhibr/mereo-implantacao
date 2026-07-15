@@ -422,7 +422,7 @@ clientes/acme/
 │   ├── diagnostico.json
 │   ├── diagnostico_resumo.md
 │   ├── mapeamento.json
-│   ├── dicionario_areas.csv      (gerado nas transformações)
+│   ├── dicionario_areas.csv      (de-para manual, opcional)
 │   └── dicionario_metas_*.csv
 ├── staging/         ← intermediários de cada transformação
 │   ├── 01_areas/

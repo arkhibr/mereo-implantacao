@@ -16,8 +16,6 @@ from ferramentas.qualidade import erros_planilha
 CAMPOS_OBRIGATORIOS = ["Código da Área*", "Descrição da Área*", "Código da Filial*"]
 TODOS_CAMPOS = ["Código da Área*", "Descrição da Área*", "Código da Filial*",
                 "Código da Área Superior", "Status da Área"]
-PREFIXO_AREA = "AREA_"
-PREFIXO_FILIAL = "FIL_"
 STAGING_DIR = "staging/01_areas"
 
 
@@ -64,13 +62,18 @@ def executar(pasta_cliente: str, codigo_filial_padrao: str = "1") -> dict:
         df["Código da Filial*"] = codigo_filial_padrao
         resultado["avisos"].append(f"Código da Filial preenchido com valor padrão: {codigo_filial_padrao}")
 
-    # Recodificar área
-    ids_area = df["Código da Área*"].dropna().astype(str).unique().tolist()
-    res_dic = construir_dicionario.construir(ids_area, PREFIXO_AREA)
-    dic_areas = {e["id_origem"]: e["id_destino"] for e in res_dic["dados"]["dicionario"]}
-
-    res_aplic = aplicar_dicionario.aplicar(df, dic_areas, ["Código da Área*", "Código da Área Superior"])
-    df = res_aplic["dados"]["dataframe"]
+    # Códigos de área do cliente passam adiante como estão — a plataforma não usa prefixo.
+    # De-para manual opcional em config/dicionario_areas.csv (ex.: fonte com nome no lugar
+    # do código); colaboradores e metas aplicam o mesmo arquivo, mantendo a FK consistente.
+    caminho_dic = config / "dicionario_areas.csv"
+    if caminho_dic.exists():
+        res_carga = construir_dicionario.carregar(str(caminho_dic))
+        dic_areas = res_carga["dados"].get("mapa", {})
+        if dic_areas:
+            res_aplic = aplicar_dicionario.aplicar(
+                df, dic_areas, ["Código da Área*", "Código da Área Superior"], ausentes="manter")
+            df = res_aplic["dados"]["dataframe"]
+            resultado["avisos"].append("De-para manual de áreas aplicado (config/dicionario_areas.csv).")
 
     # Validar hierarquia
     if "Código da Área Superior" in df.columns:
@@ -90,15 +93,11 @@ def executar(pasta_cliente: str, codigo_filial_padrao: str = "1") -> dict:
             df[col] = ""
     df = df[TODOS_CAMPOS]
 
-    # Persistir dicionário e staging
-    caminho_dic = config / "dicionario_areas.csv"
-    construir_dicionario.salvar(res_dic["dados"]["dicionario"], str(caminho_dic))
-
     caminho_out = staging / "areas_transformadas.csv"
     df.to_csv(str(caminho_out), sep=";", index=False, encoding="utf-8-sig")
 
     resultado["dados"]["linhas_transformadas"] = len(df)
-    resultado["dados"]["arquivos_gerados"] = [str(caminho_out), str(caminho_dic)]
+    resultado["dados"]["arquivos_gerados"] = [str(caminho_out)]
     return resultado
 
 

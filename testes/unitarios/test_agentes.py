@@ -310,3 +310,67 @@ class TestValidacaoReferencial:
         resumo = resultado["dados"]["resumo"]
         bloqueados = [r["entidade"] for r in resumo if r["status"] == "bloqueado"]
         assert "referencial" not in bloqueados
+
+
+# ── códigos sem prefixo (o cliente manda o código, a plataforma não usa prefixo) ─
+
+class TestCodigosSemPrefixo:
+
+    def _rodar_areas(self, cliente_dir, df_raw):
+        from agentes.areas import agente as ag_areas
+        df_raw.to_csv(cliente_dir / "areas.csv", sep=";", index=False, encoding="utf-8")
+        m = {"areas": {"campos": [], "arquivo_sugerido": "areas.csv", "aba_sugerida": None}}
+        (cliente_dir / "config" / "mapeamento.json").write_text(json.dumps(m), encoding="utf-8")
+        res = ag_areas.executar(str(cliente_dir))
+        df = pd.read_csv(cliente_dir / "staging/01_areas/areas_transformadas.csv",
+                         sep=";", encoding="utf-8-sig", dtype=str)
+        return df, res
+
+    def test_area_sem_prefixo(self, cliente_dir):
+        df, res = self._rodar_areas(cliente_dir, pd.DataFrame({
+            "Código da Área*": ["1.1", "1.1.1"],
+            "Descrição da Área*": ["Operações", "Logística"],
+            "Código da Área Superior": [None, "1.1"],
+        }))
+        assert df["Código da Área*"].tolist() == ["1.1", "1.1.1"]
+        assert df["Código da Área Superior"].iloc[1] == "1.1"
+        # dicionário não é mais gerado
+        assert not (cliente_dir / "config" / "dicionario_areas.csv").exists()
+
+    def test_area_de_para_manual_aplicado(self, cliente_dir):
+        (cliente_dir / "config" / "dicionario_areas.csv").write_text(
+            "id_origem;id_destino\nDiretoria Comercial;1.2\n", encoding="utf-8")
+        df, res = self._rodar_areas(cliente_dir, pd.DataFrame({
+            "Código da Área*": ["Diretoria Comercial"],
+            "Descrição da Área*": ["Comercial"],
+        }))
+        assert df["Código da Área*"].iloc[0] == "1.2"
+        assert any("De-para manual" in av for av in res["avisos"])
+
+    def test_meta_sem_prefixo(self, tmp_path):
+        df = pd.DataFrame({"Código da Meta *": ["FIN01"]})
+        r = ag_metas._classificar_e_transformar(df, "individual", {}, {}, {}, tmp_path)
+        assert r["Código da Meta *"].iloc[0] == "FIN01"
+        assert not (tmp_path / "dicionario_metas_individual.csv").exists()
+
+    def test_meta_de_para_manual_aplicado(self, tmp_path):
+        (tmp_path / "dicionario_metas_individual.csv").write_text(
+            "id_origem;id_destino\nFIN01;MT_0001\n", encoding="utf-8")
+        df = pd.DataFrame({"Código da Meta *": ["FIN01"]})
+        r = ag_metas._classificar_e_transformar(df, "individual", {}, {}, {}, tmp_path)
+        assert r["Código da Meta *"].iloc[0] == "MT_0001"
+
+    def test_indicador_sem_prefixo(self, cliente_dir):
+        from agentes.indicadores import agente as ag_ind
+        pd.DataFrame({
+            "Código do Indicador *": ["SLA01"],
+            "Descrição do Indicador *": ["SLA"],
+        }).to_csv(cliente_dir / "ind.csv", sep=";", index=False, encoding="utf-8")
+        m = {"indicadores": {"campos": [], "arquivo_sugerido": "ind.csv", "aba_sugerida": None}}
+        (cliente_dir / "config" / "mapeamento.json").write_text(json.dumps(m), encoding="utf-8")
+        res = ag_ind.executar(str(cliente_dir))
+        assert res["status"] == "ok"
+        df = pd.read_csv(cliente_dir / "staging/03_indicadores/indicadores_transformados.csv",
+                         sep=";", encoding="utf-8-sig", dtype=str)
+        assert df["Código do Indicador *"].iloc[0] == "SLA01"
+        assert not (cliente_dir / "config" / "dicionario_indicadores.csv").exists()

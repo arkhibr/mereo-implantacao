@@ -98,34 +98,22 @@ Consultor responsável:
 
 ---
 
-### Passo 2 — Construir o dicionário de recodificação (quando necessário)
+### Passo 2 — Construir o dicionário de de-para (apenas quando necessário)
 
-Se o cliente usa identificadores numéricos internos (ex: `289`, `1510`), construa um dicionário de tradução antes de transformar qualquer entidade.
+**Regra geral: o código do cliente passa adiante como está.** Não invente prefixos (`AREA_`, `IND_`, `METI_`…) — eles não têm significado na plataforma e sujam o código. Respeite apenas os limites de formato (ex.: indicador e pilar são `Texto(10)`; meta é `Texto(20)`).
 
-O dicionário mapeia o código do cliente para o código que será usado na plataforma:
+Construa um dicionário de de-para **manual** somente quando a fonte não traz o código utilizável — por exemplo, quando vem o nome/descrição no lugar do código, ou quando a entidade já está cadastrada na plataforma com outro código (indicadores, pilares).
 
-```
-clientes/<nome_cliente>/config/dicionario_codigos.csv
+Os agentes aplicam automaticamente os de-para que existirem em `config/`:
 
-tipo_entidade ; codigo_cliente ; codigo_plataforma ; descricao
-area          ; 55             ; AREA_055          ; Diretoria Comercial
-colaborador   ; 289            ; COL_289           ; João da Silva
-indicador     ; 1437           ; IND_1437          ; Receita Bruta
-meta          ; 1510           ; MET_1510          ; Meta Vendas Q1
-```
+| Arquivo (formato `id_origem;id_destino`) | Aplicado em |
+|---|---|
+| `dicionario_areas.csv` | Áreas (código e área superior), Colaboradores, Metas |
+| `dicionario_indicadores.csv` | Indicadores, Metas |
+| `dicionario_metas_<tipo>.csv` | Metas, Curva de Alcance, Valores |
+| `dicionario_colaboradores.csv` | Metas |
 
-**Regras para geração de códigos da plataforma:**
-
-| Entidade | Prefixo sugerido | Exemplo |
-|---|---|---|
-| Área | `AREA_` | `AREA_055` |
-| Colaborador | `COL_` | `COL_289` |
-| Indicador | `IND_` | `IND_1437` |
-| Meta Individual | `METI_` | `METI_1510` |
-| Meta Compartilhada | `METC_` | `METC_1864` |
-| Meta de Projeto | `METP_` | `METP_0042` |
-
-> O dicionário é o artefato central desta fase. Ele garante consistência referencial — o mesmo código de área usado em Colaboradores e em Metas deve ser exatamente o mesmo.
+> O de-para garante consistência referencial — o mesmo código de área usado em Colaboradores e em Metas deve ser exatamente o mesmo, por isso todos os agentes leem o mesmo arquivo.
 
 ---
 
