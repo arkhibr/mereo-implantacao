@@ -12,7 +12,6 @@ uma tool separada que só deve ser chamada quando o agente decide commitar.
 """
 import json
 import shutil
-from datetime import date
 from pathlib import Path
 import sys
 
@@ -25,7 +24,8 @@ from agentes.validacao.agente import (
     REFERENCIAS,
     CHAVES_UNICAS,
 )
-from ferramentas.exportacao import validar_schema, validar_referencias
+from ferramentas.exportacao import validar_schema, validar_referencias, validar_codigos, exportar_output
+from ferramentas.transformacao.dominios_plataforma import REGRAS_CODIGOS
 from ferramentas.qualidade import duplicatas
 from nucleo.hitl import construir_tool_hitl
 from nucleo.registro_tools import RegistroTools, Tool
@@ -113,6 +113,11 @@ def construir_registro(pasta_cliente: str, sessao=None) -> RegistroTools:
             schema = validar_schema.schema_do_template(str(caminho_tmpl))
             res_schema = validar_schema.validar(df, schema)
             achados.extend(res_schema["dados"]["achados"])
+
+        regras = REGRAS_CODIGOS.get(entidade)
+        if regras:
+            res_cod = validar_codigos.validar(df, regras)
+            achados.extend(res_cod["dados"]["achados"])
 
         chave = CHAVES_UNICAS.get(entidade)
         if chave and chave in df.columns:
@@ -238,34 +243,16 @@ def construir_registro(pasta_cliente: str, sessao=None) -> RegistroTools:
         }
 
     def t_copiar_output(data: str = None) -> dict:
-        data_str = data or date.today().isoformat()
-        output = base / "output" / data_str
-        output.mkdir(parents=True, exist_ok=True)
-
-        # BOM UTF-8: necessário para o Excel abrir os CSVs corretamente —
-        # sem ele os acentos viram mojibake (CÃ³digo, Ãrea etc).
-        BOM = b"\xef\xbb\xbf"
-        copiados = []
-        ausentes = []
-        for staging_rel, (nome_template, _chave) in STAGING_PARA_TEMPLATE.items():
-            src = base / staging_rel
-            if src.exists():
-                dst = output / nome_template
-                dados = src.read_bytes()
-                if not dados.startswith(BOM):
-                    dados = BOM + dados
-                dst.write_bytes(dados)
-                copiados.append(nome_template)
-            else:
-                ausentes.append(nome_template)
+        arquivos = {rel: nome for rel, (nome, _chave) in STAGING_PARA_TEMPLATE.items()}
+        res_exp = exportar_output.exportar(base, arquivos, data=data)
 
         return {
             "status": "ok",
             "dados": {
-                "diretorio_output": str(output.relative_to(base)),
-                "arquivos_copiados": copiados,
-                "ausentes": ausentes,
-                "data": data_str,
+                "diretorio_output": str(Path(res_exp["dados"]["diretorio_output"]).relative_to(base)),
+                "arquivos_copiados": res_exp["dados"]["arquivos_gerados"],
+                "ausentes": res_exp["dados"]["ausentes"],
+                "data": res_exp["dados"]["data"],
             },
         }
 
@@ -382,8 +369,9 @@ def construir_registro(pasta_cliente: str, sessao=None) -> RegistroTools:
     registro.registrar(Tool(
         nome="copiar_para_output",
         descricao=(
-            "Copia os arquivos de staging/ para output/<data>/ usando o nome do template como "
-            "destino. Chame APENAS quando o status for 'aprovado' (direto) ou 'aprovado_com_ressalvas' "
+            "Exporta os arquivos de staging/ como planilhas .xlsx em output/<data>/, nomeadas "
+            "pelo template (formato que a plataforma importa). Chame APENAS quando o status for "
+            "'aprovado' (direto) ou 'aprovado_com_ressalvas' "
             "(após autorização via perguntar_humano). Nunca chame em estado 'bloqueado'."
         ),
         input_schema={

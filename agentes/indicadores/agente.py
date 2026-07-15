@@ -11,6 +11,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from ferramentas.codificacao import construir_dicionario, aplicar_dicionario
 from ferramentas.transformacao import normalizar_dominio
+from ferramentas.transformacao.dominios_plataforma import (
+    EQUIVALENCIAS_POLARIDADE, EQUIVALENCIAS_FREQUENCIA, EQUIVALENCIAS_UNIDADE_MEDIDA,
+)
 from ferramentas.qualidade import erros_planilha
 
 TODOS_CAMPOS = [
@@ -25,11 +28,6 @@ CAMPOS_OBRIGATORIOS = [
     "Código do Indicador *", "Descrição do Indicador *", "Código da Unidade de Medida *",
     "Código da Faixa de Farol *", "Código de Frequência de Acompanhamento *", "Polaridade *", "Ativo *",
 ]
-EQUIVALENCIAS_POLARIDADE = {
-    "1": ["1", "maior melhor", "maior_melhor", "crescente", "positivo", "asc"],
-    "2": ["2", "menor melhor", "menor_melhor", "decrescente", "negativo", "desc"],
-    "3": ["3", "nominal", "exato", "igual"],
-}
 PREFIXO_INDICADOR = "IND_"
 STAGING_DIR = "staging/03_indicadores"
 
@@ -75,12 +73,21 @@ def executar(pasta_cliente: str, unidade_padrao: str = "1",
         df = res_aplic["dados"]["dataframe"]
         construir_dicionario.salvar(res_dic["dados"]["dicionario"], str(config / "dicionario_indicadores.csv"))
 
-    # Normalizar polaridade
-    if "Polaridade *" in df.columns:
-        res = normalizar_dominio.normalizar(df, "Polaridade *", EQUIVALENCIAS_POLARIDADE, padrao="1")
-        df = res["dados"]["dataframe"]
-        if res["avisos"]:
-            resultado["avisos"].extend(res["avisos"])
+    # Normalizar domínios da plataforma (texto → código oficial)
+    normalizacoes = [
+        ("Polaridade *", EQUIVALENCIAS_POLARIDADE, "1"),
+        ("Código de Frequência de Acompanhamento *", EQUIVALENCIAS_FREQUENCIA, None),
+        ("Código da Unidade de Medida *", EQUIVALENCIAS_UNIDADE_MEDIDA, None),
+    ]
+    for coluna, equivalencias, padrao in normalizacoes:
+        if coluna in df.columns:
+            res = normalizar_dominio.normalizar(df, coluna, equivalencias, padrao=padrao)
+            df = res["dados"]["dataframe"]
+            if res["dados"]["nao_reconhecidos"]:
+                resultado["avisos"].append(
+                    f"'{coluna}': valor(es) não reconhecido(s) no domínio da plataforma: "
+                    f"{res['dados']['nao_reconhecidos'][:5]}"
+                )
 
     # Defaults para campos obrigatórios
     defaults = {

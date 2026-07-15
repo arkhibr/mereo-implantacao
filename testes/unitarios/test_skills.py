@@ -209,3 +209,37 @@ def test_validar_referencias_invalida():
     res = validar_referencias.validar({"areas": areas, "colaboradores": colab}, refs)
     assert res["status"] == "erro"
     assert res["dados"]["achados"][0]["valores_invalidos"] == ["A999"]
+
+
+# ── exportar_output ──────────────────────────────────────────────────────────
+
+def test_exportar_output_gera_xlsx_com_nome_do_template(tmp_path):
+    from ferramentas.exportacao import exportar_output
+
+    staging = tmp_path / "staging" / "01_areas"
+    staging.mkdir(parents=True)
+    df = pd.DataFrame({"Código da Área*": ["A001"], "Status da Área": ["1"]})
+    df.to_csv(staging / "areas_transformadas.csv", sep=";", index=False, encoding="utf-8-sig")
+
+    res = exportar_output.exportar(tmp_path, {
+        "staging/01_areas/areas_transformadas.csv": "Import_Áreas (Estrutura Hierárquica).csv",
+    }, data="2026-07-15")
+
+    destino = tmp_path / "output" / "2026-07-15" / "Import_Áreas (Estrutura Hierárquica).xlsx"
+    assert destino.exists()
+    assert res["dados"]["arquivos_gerados"] == ["Import_Áreas (Estrutura Hierárquica).xlsx"]
+
+    lido = pd.read_excel(destino, sheet_name="Plan1", dtype=str)
+    assert list(lido.columns) == ["Código da Área*", "Status da Área"]
+    # códigos preservados como texto ("1" não vira 1.0)
+    assert lido["Status da Área"].iloc[0] == "1"
+
+
+def test_exportar_output_reporta_staging_ausente(tmp_path):
+    from ferramentas.exportacao import exportar_output
+
+    res = exportar_output.exportar(tmp_path, {
+        "staging/01_areas/areas_transformadas.csv": "Import_Áreas (Estrutura Hierárquica).csv",
+    })
+    assert res["dados"]["arquivos_gerados"] == []
+    assert res["dados"]["ausentes"] == ["Import_Áreas (Estrutura Hierárquica).csv"]

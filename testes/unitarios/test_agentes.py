@@ -163,15 +163,15 @@ class TestMetasTipoDefinicao:
     def test_tipo_definicao_preenchido_quando_ausente(self, tmp_path):
         df = pd.DataFrame({"Código da Meta *": ["M01"]})
         r = self._transformar(df, tmp_path)
-        assert r["Tipo de Definição do Valor *"].iloc[0] == "Manual"
+        assert r["Tipo de Definição do Valor *"].iloc[0] == "1"
 
-    def test_tipo_definicao_existente_preservado(self, tmp_path):
+    def test_tipo_definicao_texto_normalizado_para_codigo(self, tmp_path):
         df = pd.DataFrame({
-            "Código da Meta *": ["M01"],
-            "Tipo de Definição do Valor *": ["Fórmula"],
+            "Código da Meta *": ["M01", "M02"],
+            "Tipo de Definição do Valor *": ["Manual", "Fórmula"],
         })
         r = self._transformar(df, tmp_path)
-        assert r["Tipo de Definição do Valor *"].iloc[0] == "Fórmula"
+        assert r["Tipo de Definição do Valor *"].tolist() == ["1", "2"]
 
 
 # ── mapeamento: flag travado ──────────────────────────────────────────────────
@@ -271,8 +271,8 @@ class TestValidacaoReferencial:
             "Login do Responsável pela Meta *": ["joao"],
             "Objetivo da Meta *":              ["Crescer"],
             "Peso da Meta *":                  ["20"],
-            "Tipo de Agregação *":             ["Media"],
-            "Tipo de Definição do Valor *":    ["Manual"],
+            "Tipo de Agregação *":             ["3"],
+            "Tipo de Definição do Valor *":    ["1"],
         })
 
     def test_area_invalida_bloqueia_referencial(self, tmp_path):

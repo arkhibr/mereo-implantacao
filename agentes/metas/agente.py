@@ -12,6 +12,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from ferramentas.codificacao import construir_dicionario, aplicar_dicionario
 from ferramentas.transformacao import normalizar_dominio, agregar_pipe
+from ferramentas.transformacao.dominios_plataforma import (
+    EQUIVALENCIAS_AGREGACAO, EQUIVALENCIAS_DEFINICAO_VALOR,
+)
 from ferramentas.qualidade import erros_planilha
 
 CAMPOS_INDIVIDUAL = [
@@ -82,7 +85,10 @@ def executar(pasta_cliente: str) -> dict:
             resultado["avisos"].append(f"{tipo}: {len(res_qual['dados']['achados'])} problema(s) nos dados brutos.")
 
         df = _aplicar_mapeamento(df_raw, conf.get("campos", []))
-        df = _classificar_e_transformar(df, chave, dic_areas, dic_colab, dic_ind, config)
+        avisos_transf = []
+        df = _classificar_e_transformar(df, chave, dic_areas, dic_colab, dic_ind, config,
+                                        avisos=avisos_transf)
+        resultado["avisos"].extend(f"{tipo}: {av}" for av in avisos_transf)
 
         staging = base / STAGING_DIRS[chave]
         staging.mkdir(parents=True, exist_ok=True)
@@ -105,13 +111,23 @@ def executar(pasta_cliente: str) -> dict:
 
 
 def _classificar_e_transformar(df: pd.DataFrame, tipo: str, dic_areas: dict,
-                                dic_colab: dict, dic_ind: dict, config: Path) -> pd.DataFrame:
+                                dic_colab: dict, dic_ind: dict, config: Path,
+                                avisos: list = None) -> pd.DataFrame:
+    if avisos is None:
+        avisos = []
     prefixo = PREFIXO_META.get(tipo, "META_")
 
     # Derivar Código do Indicador * do Código da Meta * se não mapeado na fonte
     if "Código da Meta *" in df.columns:
         if "Código do Indicador *" not in df.columns or df["Código do Indicador *"].isna().all():
             df["Código do Indicador *"] = df["Código da Meta *"].copy()
+            if not dic_ind:
+                avisos.append(
+                    "'Código do Indicador *' derivado do código da meta SEM dicionário de "
+                    "indicadores (config/dicionario_indicadores.csv) — os valores podem não "
+                    "corresponder aos códigos da plataforma (limite Texto(10)); a validação "
+                    "vai bloquear códigos suspeitos."
+                )
 
     if "Código da Meta *" in df.columns:
         ids = df["Código da Meta *"].dropna().astype(str).unique().tolist()
@@ -151,9 +167,25 @@ def _classificar_e_transformar(df: pd.DataFrame, tipo: str, dic_areas: dict,
                 return None
         df["Peso da Meta *"] = df["Peso da Meta *"].apply(_extrair_primeiro_peso)
 
+    # Normalizar domínios da plataforma (texto → código oficial)
+    for coluna, equivalencias in [
+        ("Tipo de Agregação *", EQUIVALENCIAS_AGREGACAO),
+        ("Tipo de Definição do Valor *", EQUIVALENCIAS_DEFINICAO_VALOR),
+    ]:
+        if coluna in df.columns:
+            res = normalizar_dominio.normalizar(df, coluna, equivalencias, padrao=None)
+            df = res["dados"]["dataframe"]
+            if res["dados"]["nao_reconhecidos"]:
+                avisos.append(
+                    f"'{coluna}': valor(es) não reconhecido(s) no domínio da plataforma: "
+                    f"{res['dados']['nao_reconhecidos'][:5]}"
+                )
+
     # Preencher "Tipo de Definição do Valor *" com default se ausente
+    # (1 = Definido pelo Usuário, código oficial da plataforma)
     if "Tipo de Definição do Valor *" not in df.columns or df["Tipo de Definição do Valor *"].isna().all():
-        df["Tipo de Definição do Valor *"] = "Manual"
+        df["Tipo de Definição do Valor *"] = "1"
+        avisos.append("'Tipo de Definição do Valor *' preenchido com padrão: 1 (Definido pelo Usuário).")
 
     return df
 

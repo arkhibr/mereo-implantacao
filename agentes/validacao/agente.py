@@ -6,12 +6,12 @@ import json
 import shutil
 import pandas as pd
 from pathlib import Path
-from datetime import date
 import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from ferramentas.exportacao import validar_schema, validar_referencias
+from ferramentas.exportacao import validar_schema, validar_referencias, validar_codigos, exportar_output
+from ferramentas.transformacao.dominios_plataforma import REGRAS_CODIGOS
 from ferramentas.qualidade import duplicatas
 from nucleo import templates as _tpl
 
@@ -92,6 +92,12 @@ def executar(pasta_cliente: str, pasta_templates: str = None) -> dict:
             res_schema = validar_schema.validar(df, schema)
             achados_entidade.extend(res_schema["dados"]["achados"])
 
+        # Validação de campos codificados (domínios e limites da plataforma)
+        regras = REGRAS_CODIGOS.get(chave_tabela)
+        if regras:
+            res_cod = validar_codigos.validar(df, regras)
+            achados_entidade.extend(res_cod["dados"]["achados"])
+
         # Validação de unicidade
         chave = CHAVES_UNICAS.get(chave_tabela)
         if chave and chave in df.columns:
@@ -157,23 +163,15 @@ def executar(pasta_cliente: str, pasta_templates: str = None) -> dict:
     _salvar_relatorio_md(resumo, todos_achados, status_geral, caminho_rel)
     resultado["dados"]["relatorio"] = str(caminho_rel)
 
-    # Copiar para output se aprovado
+    # Exportar para output se aprovado (a plataforma importa .xlsx, não CSV)
     if status_geral == "aprovado":
-        data_hoje = date.today().isoformat()
-        output = base / "output" / data_hoje
-        output.mkdir(parents=True, exist_ok=True)
-        # BOM UTF-8: o Excel só abre os CSVs corretamente com BOM —
-        # sem ele os acentos viram mojibake (CÃ³digo, Ãrea etc).
-        BOM = b"\xef\xbb\xbf"
-        for staging_rel, (nome_template, _) in STAGING_PARA_TEMPLATE.items():
-            src = base / staging_rel
-            if src.exists():
-                dados = src.read_bytes()
-                if not dados.startswith(BOM):
-                    dados = BOM + dados
-                (output / nome_template).write_bytes(dados)
-        resultado["dados"]["output_gerado"] = str(output)
-        resultado["avisos"].append(f"Arquivos copiados para output/{data_hoje}/")
+        arquivos = {rel: nome for rel, (nome, _) in STAGING_PARA_TEMPLATE.items()}
+        res_exp = exportar_output.exportar(base, arquivos)
+        resultado["dados"]["output_gerado"] = res_exp["dados"]["diretorio_output"]
+        resultado["avisos"].append(
+            f"{len(res_exp['dados']['arquivos_gerados'])} planilha(s) .xlsx geradas em "
+            f"output/{res_exp['dados']['data']}/"
+        )
     else:
         resultado["status"] = "erro"
         nomes = [r["entidade"] for r in bloqueados]
