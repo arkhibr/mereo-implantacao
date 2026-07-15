@@ -23,6 +23,7 @@ from agentes.validacao.agente import (
     STAGING_PARA_TEMPLATE,
     REFERENCIAS,
     CHAVES_UNICAS,
+    _validar_periodicidade,
 )
 from ferramentas.exportacao import validar_schema, validar_referencias, validar_codigos, exportar_output
 from ferramentas.transformacao.dominios_plataforma import REGRAS_CODIGOS
@@ -172,13 +173,14 @@ def construir_registro(pasta_cliente: str, sessao=None) -> RegistroTools:
             }
 
         res = validar_referencias.validar(tabelas, refs_aplicaveis)
+        achados = res["dados"]["achados"] + _validar_periodicidade(base, tabelas)
         return {
             "status": "ok",
             "dados": {
                 "tabelas_consideradas": list(tabelas.keys()),
                 "referencias_verificadas": res["dados"]["total_referencias_verificadas"],
-                "total_achados": res["dados"]["total_achados"],
-                "achados": res["dados"]["achados"],
+                "total_achados": len(achados),
+                "achados": achados,
             },
         }
 

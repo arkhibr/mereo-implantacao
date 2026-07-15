@@ -10,7 +10,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from ferramentas.codificacao import aplicar_dicionario
-from ferramentas.transformacao import converter_datas
+from ferramentas.transformacao import converter_datas, periodicidade
 
 STAGING_DIRS = {
     "previstos":  "staging/08_valores_previstos",
@@ -65,6 +65,10 @@ def executar(pasta_cliente: str) -> dict:
                 if res["avisos"]:
                     resultado["avisos"].extend(res["avisos"])
 
+        # Normalizar para o layout do template: Código da Meta | Tipo de Valor | MM/AAAA...
+        df, avisos_layout = _normalizar_layout(df, col_meta)
+        resultado["avisos"].extend(f"{tipo}: {av}" for av in avisos_layout)
+
         staging = base / STAGING_DIRS[tipo]
         staging.mkdir(parents=True, exist_ok=True)
         caminho_out = staging / f"valores_{tipo}_transformados.csv"
@@ -76,6 +80,55 @@ def executar(pasta_cliente: str) -> dict:
     resultado["dados"]["contagens"] = contagens
     resultado["dados"]["arquivos_gerados"] = arquivos_gerados
     return resultado
+
+
+def _normalizar_layout(df: pd.DataFrame, col_meta: str):
+    """
+    Pivota/renomeia para o formato do template de valores da plataforma:
+    colunas de período viram rótulos MM/AAAA na ordem cronológica.
+    Sem colunas de período reconhecíveis, mantém como veio (com aviso).
+    """
+    avisos = []
+    periodos = periodicidade.colunas_periodo(df)
+    if not periodos:
+        avisos.append(
+            "Nenhuma coluna de período (mês/ano) reconhecida — layout mantido como veio; "
+            "revisar antes da importação."
+        )
+        return df, avisos
+
+    # Ano ausente no rótulo ("Jan", "Fev"...) herda o ano mais comum entre as colunas datadas
+    anos = [ano for (_mes, ano) in periodos.values() if ano]
+    ano_padrao = max(set(anos), key=anos.count) if anos else None
+
+    renomear = {}
+    ordenaveis = []
+    for col, (mes, ano) in periodos.items():
+        ano_final = ano or ano_padrao
+        if ano_final is None:
+            avisos.append(f"Coluna '{col}' sem ano identificável — descartada do layout.")
+            continue
+        rotulo = periodicidade.rotulo_template(mes, ano_final)
+        renomear[col] = rotulo
+        ordenaveis.append((ano_final, mes, rotulo))
+
+    if not ordenaveis:
+        return df, avisos
+
+    if col_meta and col_meta in df.columns and col_meta != "Código da Meta":
+        renomear[col_meta] = "Código da Meta"
+    df = df.rename(columns=renomear)
+
+    if "Código da Meta" not in df.columns:
+        avisos.append("Coluna de código da meta não identificada — layout mantido como veio.")
+        return df, avisos
+    if "Tipo de Valor" not in df.columns:
+        df["Tipo de Valor"] = ""
+
+    rotulos = [r for (_a, _m, r) in sorted(ordenaveis)]
+    df = df[["Código da Meta", "Tipo de Valor"] + rotulos]
+    df = df[df["Código da Meta"].notna() & (df["Código da Meta"].astype(str).str.strip() != "")]
+    return df, avisos
 
 
 def _parece_serial_excel(serie: pd.Series) -> bool:

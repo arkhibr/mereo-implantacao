@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from ferramentas.codificacao import aplicar_dicionario
 from ferramentas.inferencia.indicadores import inferir_polaridade, inferir_unidade
 from ferramentas.transformacao import normalizar_dominio, agregar_pipe
+from ferramentas.transformacao import periodicidade
 from ferramentas.transformacao.dominios_plataforma import (
     EQUIVALENCIAS_AGREGACAO, EQUIVALENCIAS_DEFINICAO_VALOR,
 )
@@ -120,7 +121,8 @@ def executar(pasta_cliente: str) -> dict:
     # indicador é derivado das metas e o cliente não tem fonte própria, o arquivo de
     # importação de indicadores sai daqui, 1:1, para a FK metas→indicadores fechar.
     if pares_indicadores and not mapeamento.get("indicadores", {}).get("arquivo_sugerido"):
-        df_ind = _gerar_indicadores_derivados(pares_indicadores)
+        frequencias = _detectar_frequencias_valores(base, mapeamento, resultado["avisos"])
+        df_ind = _gerar_indicadores_derivados(pares_indicadores, frequencias)
         staging_ind = base / "staging/03_indicadores"
         staging_ind.mkdir(parents=True, exist_ok=True)
         caminho_ind = staging_ind / "indicadores_transformados.csv"
@@ -137,8 +139,39 @@ def executar(pasta_cliente: str) -> dict:
     return resultado
 
 
-def _gerar_indicadores_derivados(pares: list) -> pd.DataFrame:
+def _detectar_frequencias_valores(base: Path, mapeamento: dict, avisos: list) -> dict:
+    """
+    Frequência por meta a partir da estrutura dos valores na fonte
+    (1 valor no ano = anual, 2+ = mensal). Previstos primeiro; realizados como
+    fallback (realizados de ano parcial subestimam a contagem).
+    """
+    for chave in ["valores_previstos", "valores_realizados"]:
+        conf = mapeamento.get(chave, {})
+        arquivo = conf.get("arquivo_sugerido")
+        if not arquivo:
+            continue
+        df = _ler_dados(base / arquivo, conf.get("aba_sugerida"), conf.get("header_linha", 0))
+        if df is None:
+            continue
+        col_meta = next(
+            (c for c in df.columns if "meta" in str(c).lower() or "cod" in str(c).lower()),
+            df.columns[0] if len(df.columns) else None,
+        )
+        res = periodicidade.detectar_frequencias(df, col_meta)
+        frequencias = res["dados"]["frequencias"]
+        if frequencias:
+            anuais = sum(1 for f in frequencias.values() if f == periodicidade.FREQUENCIA_ANUAL)
+            avisos.append(
+                f"Periodicidade detectada pelos valores de '{chave}': "
+                f"{len(frequencias) - anuais} mensal(is), {anuais} anual(is)."
+            )
+            return frequencias
+    return {}
+
+
+def _gerar_indicadores_derivados(pares: list, frequencias: dict = None) -> pd.DataFrame:
     """Monta o staging de indicadores (1 por código) a partir de (código, objetivo) das metas."""
+    frequencias = frequencias or {}
     vistos = {}
     for codigo, objetivo in pares:
         if pd.isna(codigo) or str(codigo).strip() == "":
@@ -158,7 +191,8 @@ def _gerar_indicadores_derivados(pares: list) -> pd.DataFrame:
             # Unidade inferida do texto; sem sinal, UM007 (Número) como neutro
             "Código da Unidade de Medida *": inferir_unidade(descricao) or "UM007",
             "Código da Faixa de Farol *": "FXF01",
-            "Código de Frequência de Acompanhamento *": "1",
+            # Frequência detectada pela estrutura dos valores; sem sinal, mensal
+            "Código de Frequência de Acompanhamento *": frequencias.get(codigo, "1"),
             "Polaridade *": "2" if polaridade_texto == "Menor é Melhor" else "1",
             "Ativo *": "1",
         })

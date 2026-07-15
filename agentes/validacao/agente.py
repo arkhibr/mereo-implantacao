@@ -149,6 +149,15 @@ def executar(pasta_cliente: str, pasta_templates: str = None) -> dict:
                 resumo.append({"entidade": "referencial", "status": "aviso",
                                 "linhas": 0, "achados": len(achados_ref)})
 
+    # Consistência de periodicidade: valores × frequência do indicador da meta
+    achados_per = _validar_periodicidade(base, tabelas)
+    if achados_per:
+        todos_achados.extend(achados_per)
+        sev_per = {a["severidade"] for a in achados_per}
+        status_per = "bloqueado" if ("critico" in sev_per or "alto" in sev_per) else "aviso"
+        resumo.append({"entidade": "periodicidade", "status": status_per,
+                       "linhas": 0, "achados": len(achados_per)})
+
     # Decidir status geral
     bloqueados = [r for r in resumo if r["status"] == "bloqueado"]
     status_geral = "bloqueado" if bloqueados else "aprovado"
@@ -178,6 +187,76 @@ def executar(pasta_cliente: str, pasta_templates: str = None) -> dict:
         resultado["erros"].append(f"{len(bloqueados)} entidade(s) bloqueada(s): {nomes}. Corrigir antes de gerar output.")
 
     return resultado
+
+
+VALORES_STAGING = {
+    "valores_previstos": "staging/08_valores_previstos/valores_previstos_transformados.csv",
+    "valores_realizados": "staging/09_valores_realizados/valores_realizados_transformados.csv",
+}
+
+
+def _validar_periodicidade(base: Path, tabelas: dict) -> list:
+    """
+    Meta com indicador anual (frequência 8) deve ter no máximo 1 valor no ano;
+    mais de um bloqueia. Mensal com 1 valor vira aviso (pode ser ano parcial).
+    """
+    from ferramentas.transformacao import periodicidade
+
+    achados = []
+    inds = tabelas.get("indicadores")
+    if inds is None or "Código de Frequência de Acompanhamento *" not in inds.columns:
+        return achados
+
+    freq_por_ind = dict(zip(inds["Código do Indicador *"].astype(str),
+                            inds["Código de Frequência de Acompanhamento *"].astype(str)))
+    ind_por_meta = {}
+    for chave in ["metas_individuais", "metas_projeto"]:
+        metas = tabelas.get(chave)
+        if metas is not None and "Código do Indicador *" in metas.columns:
+            ind_por_meta.update(zip(metas["Código da Meta *"].astype(str),
+                                    metas["Código do Indicador *"].astype(str)))
+    if not ind_por_meta:
+        return achados
+
+    for tipo, rel in VALORES_STAGING.items():
+        caminho = base / rel
+        if not caminho.exists():
+            continue
+        df = pd.read_csv(str(caminho), sep=";", encoding="utf-8-sig", dtype=str)
+        periodos = periodicidade.colunas_periodo(df)
+        if not periodos or "Código da Meta" not in df.columns:
+            continue
+
+        anuais_estouradas, mensais_com_um = [], []
+        for _, linha in df.iterrows():
+            meta = str(linha["Código da Meta"]).strip()
+            freq = freq_por_ind.get(ind_por_meta.get(meta, ""), None)
+            if freq is None:
+                continue
+            preenchidos = sum(
+                1 for c in periodos
+                if pd.notna(linha[c]) and str(linha[c]).strip() != ""
+            )
+            if freq == periodicidade.FREQUENCIA_ANUAL and preenchidos > 1:
+                anuais_estouradas.append(meta)
+            elif freq == periodicidade.FREQUENCIA_MENSAL and preenchidos == 1:
+                mensais_com_um.append(meta)
+
+        if anuais_estouradas:
+            achados.append({
+                "entidade": "periodicidade", "severidade": "alto",
+                "tipo": "periodicidade_inconsistente", "coluna": tipo,
+                "detalhe": f"{len(anuais_estouradas)} meta(s) com indicador ANUAL e mais de "
+                           f"um valor no ano. Ex: {anuais_estouradas[:3]}",
+            })
+        if mensais_com_um:
+            achados.append({
+                "entidade": "periodicidade", "severidade": "medio",
+                "tipo": "periodicidade_suspeita", "coluna": tipo,
+                "detalhe": f"{len(mensais_com_um)} meta(s) com indicador MENSAL e um único "
+                           f"valor no ano (ano parcial?). Ex: {mensais_com_um[:3]}",
+            })
+    return achados
 
 
 def _salvar_relatorio_md(resumo: list, achados: list, status_geral: str, caminho: Path):
